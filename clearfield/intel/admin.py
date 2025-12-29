@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Source, FetchLog, RawItemfrom, Article
+from .models import Source, FetchLog, RawItem, Article
 
 
 
@@ -17,6 +17,11 @@ class FetchLogAdmin(admin.ModelAdmin):
     list_filter = ("status_code", "source__region", "source__topic")
     search_fields = ("source__name", "source__url")
     ordering = ("-fetched_at",)
+
+class ArticleInline(admin.StackedInline):
+    model = Article
+    extra = 0
+    readonly_fields = ("extracted_at",)
 
 
 @admin.register(RawItem)
@@ -58,7 +63,4 @@ class ArticleAdmin(admin.ModelAdmin):
     has_error.short_description = "Error"
 
 
-class ArticleInline(admin.StackedInline):
-    model = Article
-    extra = 0
-    readonly_fields = ("extracted_at",)
+
