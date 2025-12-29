@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import Source, FetchLog, RawItem
+from .models import Source, FetchLog, RawItemfrom, Article
+
 
 
 @admin.register(Source)
@@ -24,3 +25,40 @@ class RawItemAdmin(admin.ModelAdmin):
     list_filter = ("source__region", "source__topic", "source__source_class")
     search_fields = ("title", "url", "source__name")
     ordering = ("-published_at", "-created_at")
+    inlines = [ArticleInline]
+
+
+
+@admin.register(Article)
+class ArticleAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "item",
+        "short_title",
+        "lang",
+        "extracted_at",
+        "has_error",
+    )
+
+    list_filter = ("lang",)
+    search_fields = ("title", "text", "item__title", "item__url")
+    readonly_fields = ("extracted_at",)
+
+    def short_title(self, obj):
+        if obj.title:
+            return obj.title[:80]
+        return "(no title)"
+
+    short_title.short_description = "Title"
+
+    def has_error(self, obj):
+        return bool(obj.extract_error)
+
+    has_error.boolean = True
+    has_error.short_description = "Error"
+
+
+class ArticleInline(admin.StackedInline):
+    model = Article
+    extra = 0
+    readonly_fields = ("extracted_at",)

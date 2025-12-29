@@ -84,3 +84,19 @@ class RawItem(models.Model):
 
     def __str__(self) -> str:
         return self.title[:80]
+
+
+class Article(models.Model):
+    item = models.OneToOneField(RawItem, on_delete=models.CASCADE, related_name="article")
+
+    final_url = models.URLField(blank=True)
+    lang = models.CharField(max_length=12, blank=True)
+
+    title = models.TextField(blank=True)
+    text = models.TextField(blank=True)
+
+    extracted_at = models.DateTimeField(null=True, blank=True)
+    extract_error = models.TextField(blank=True)
+
+    def __str__(self) -> str:
+        return f"Article for item {self.item_id}"
