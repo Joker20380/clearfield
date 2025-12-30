@@ -1,0 +1,293 @@
+/* =========================================================
+   SIGNUP CHOICE MODAL — CORPORATE GLASS (#116cb3)
+   Targets ONLY: #signupChoiceModal (Bootstrap 4)
+   ========================================================= */
+
+/* ⚠️ Не используем :root, чтобы не протекало в проект */
+#signupChoiceModal{
+  --brand: #116cb3;
+  --brand-hover: #0f5fa0;
+
+  --glass-border: rgba(255,255,255,.22);
+  --glass-bg: rgba(255,255,255,.10);
+  --brand-glass: rgba(17,108,179,.18);
+
+  --shadow: 0 18px 60px rgba(0,0,0,.22);
+  --text: rgba(20,24,32,.92);
+}
+
+/* Overlay — только для signupChoiceModal (а не глобально) */
+#signupChoiceModal.modal .modal-backdrop.show,
+#signupChoiceModal + .modal-backdrop.show{
+  opacity: .55;
+}
+
+/* Dialog width */
+#signupChoiceModal .modal-dialog{
+  max-width: 520px;
+}
+
+/* Glass card */
+#signupChoiceModal .modal-content{
+  border-radius: 18px;
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow);
+
+  /* ✅ добавили малую заливку, чтобы стекло читалось на светлом фоне */
+  background-color: rgba(255,255,255,.07);
+  background-image: linear-gradient(180deg, var(--brand-glass), var(--glass-bg));
+
+  backdrop-filter: blur(18px) saturate(155%);
+  -webkit-backdrop-filter: blur(18px) saturate(155%);
+
+  overflow: hidden;
+  color: var(--text);
+}
+
+/* ✅ Header — тоже стекло, не “кирпич” */
+#signupChoiceModal .modal-header{
+  background: rgba(17,108,179,.10) !important;
+  background-image: none !important;
+
+  color: #fff;
+  border-bottom: 1px solid rgba(255,255,255,.16);
+
+  padding: 12px 14px;
+  align-items: center;
+
+  backdrop-filter: blur(18px) saturate(155%);
+  -webkit-backdrop-filter: blur(18px) saturate(155%);
+}
+
+/* Title */
+#signupChoiceModal .modal-title{
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: .2px;
+  margin: 0;
+  color: #fff;
+}
+
+/* Close button — glass */
+#signupChoiceModal .modal-header .close{
+  opacity: 1;
+  text-shadow: none;
+  color: #fff;
+
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+
+  border: 1px solid rgba(255,255,255,.30);
+  background: rgba(255,255,255,.12);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 0;
+  margin: 0;
+}
+#signupChoiceModal .modal-header .close:hover{
+  background: rgba(255,255,255,.18);
+}
+#signupChoiceModal .modal-header .close span{
+  font-size: 22px;
+  line-height: 1;
+  display: block;
+  margin-top: -2px; /* визуально центрируем × */
+}
+
+/* Body */
+#signupChoiceModal .modal-body{
+  padding: 16px 16px 18px;
+  background: transparent !important; /* на всякий */
+}
+
+/* “text-muted” в стекле делаем читаемым */
+#signupChoiceModal .text-muted{
+  color: rgba(255,255,255,.86) !important;
+}
+
+/* Links */
+#signupChoiceModal a{
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Buttons */
+#signupChoiceModal .btn{
+  border-radius: 14px;
+  font-weight: 650;
+}
+
+/* Email button in corporate glass */
+#signupChoiceModal .btn-outline-primary{
+  color: #fff !important;
+  border-color: rgba(255,255,255,.45) !important;
+  background: rgba(255,255,255,.10) !important;
+}
+#signupChoiceModal .btn-outline-primary:hover{
+  background: rgba(255,255,255,.16) !important;
+}
+
+/* If social buttons are .btn-primary */
+#signupChoiceModal .btn-primary{
+  background: var(--brand) !important;
+  border-color: transparent !important;
+}
+#signupChoiceModal .btn-primary:hover{
+  background: var(--brand-hover) !important;
+}
+
+/* HR */
+#signupChoiceModal hr{
+  border-top: 1px solid rgba(255,255,255,.22);
+  opacity: 1;
+}
+
+/* Mobile */
+@media (max-width: 480px){
+  #signupChoiceModal .modal-dialog{ margin: 12px; }
+  #signupChoiceModal .modal-content{ border-radius: 16px; }
+}
+
+/* =========================================================
+   AUTH MODALS — GLASS + CHECKBOX FIX
+   Applies to: #loginModal, #logoutModal
+   ========================================================= */
+
+/* Текст внутри body делаем читаемым */
+#loginModal .modal-body,
+#logoutModal .modal-body{
+  color: rgba(255,255,255,.92);
+}
+
+/* Внутренний “стеклянный” блок (если используешь .auth-glass) */
+#loginModal .auth-glass,
+#logoutModal .auth-glass{
+  padding: 16px;
+  border-radius: 16px;
+
+  background-color: rgba(255,255,255,.07);
+  background-image: linear-gradient(180deg, rgba(17,108,179,.18), rgba(255,255,255,.10));
+  border: 1px solid rgba(255,255,255,.22);
+
+  backdrop-filter: blur(18px) saturate(155%);
+  -webkit-backdrop-filter: blur(18px) saturate(155%);
+
+  box-shadow: 0 18px 60px rgba(0,0,0,.18);
+  color: rgba(20,24,32,.92);
+}
+
+/* Если .auth-glass не используется, всё равно не даём белить вложенным блокам */
+#loginModal .modal-content,
+#logoutModal .modal-content{
+  background-color: rgba(255,255,255,.07);
+  background-image: linear-gradient(180deg, rgba(17,108,179,.18), rgba(255,255,255,.10));
+  border: 1px solid rgba(255,255,255,.22);
+  backdrop-filter: blur(18px) saturate(155%);
+  -webkit-backdrop-filter: blur(18px) saturate(155%);
+}
+
+/* Внутренняя шапка (если она есть в partial) */
+.auth-glass-head{
+  margin-bottom: 12px;
+}
+.auth-glass-title{
+  font-size: 16px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: .2px;
+}
+.auth-glass-sub{
+  margin-top: 2px;
+  font-size: 13px;
+  color: rgba(255,255,255,.86);
+}
+
+/* Secondary button in glass */
+#loginModal .btn-outline-secondary,
+#logoutModal .btn-outline-secondary{
+  color: #fff !important;
+  border-color: rgba(255,255,255,.35) !important;
+  background: rgba(255,255,255,.06) !important;
+  border-radius: 14px;
+  font-weight: 650;
+}
+#loginModal .btn-outline-secondary:hover,
+#logoutModal .btn-outline-secondary:hover{
+  background: rgba(255,255,255,.14) !important;
+}
+
+/* Make form controls readable on glass */
+#loginModal input,
+#loginModal select,
+#loginModal textarea,
+#logoutModal input,
+#logoutModal select,
+#logoutModal textarea{
+  background: rgba(255,255,255,.16) !important;
+  border: 1px solid rgba(255,255,255,.22) !important;
+  color: rgba(20,24,32,.92) !important;
+}
+#loginModal label,
+#logoutModal label{
+  color: rgba(255,255,255,.88) !important;
+}
+
+/* =========================
+   ЧЕКБОКС — ЖЁСТКИЙ ФИКС (Bootstrap 4 safe)
+   ========================= */
+
+/* 1) Если у тебя Bootstrap form-check-input */
+#loginModal .form-check-input,
+#logoutModal .form-check-input{
+  width: 16px !important;
+  height: 16px !important;
+  transform: none !important;
+  -webkit-transform: none !important;
+  zoom: 1 !important;
+}
+
+/* 2) На всякий — прямой чекбокс */
+#loginModal input[type="checkbox"],
+#logoutModal input[type="checkbox"]{
+  -webkit-appearance: checkbox;
+  appearance: checkbox;
+
+  width: 16px !important;
+  height: 16px !important;
+
+  transform: none !important;
+  -webkit-transform: none !important;
+  zoom: 1 !important;
+
+  margin: 0 8px 0 0 !important;
+  vertical-align: middle !important;
+  display: inline-block !important;
+}
+
+/* Лэйаут лейбла рядом с чекбоксом */
+#loginModal .form-check-label,
+#logoutModal .form-check-label,
+#loginModal label,
+#logoutModal label{
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px;
+}
+
+/* Кнопки внутри модалки делаем в твоём бренде */
+#loginModal .btn-primary,
+#logoutModal .btn-primary{
+  background: #116cb3 !important;
+  border: 0 !important;
+  border-radius: 14px !important;
+  font-weight: 600;
+}
+#loginModal .btn-primary:hover,
+#logoutModal .btn-primary:hover{
+  background: #0f5fa0 !important;
+}

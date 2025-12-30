@@ -1,0 +1,967 @@
+/* ============================================================
+   custom_style.css — FINAL CLEAN (ONE SOURCE OF TRUTH)
+   - Lab filters
+   - Topbar + Office select (glass)
+   - Chat widget (corporate glass)
+   - Assistant cards / test cards
+   - Mobile: GLASS topbar + GLASS navbar + Premium drawer
+   - Mobile panel: inline (icons only) + account dropdown
+   ============================================================ */
+
+/* ============================================================
+   GLOBAL VARIABLES
+   ============================================================ */
+:root{
+  /* Brand */
+  --brand-blue: #116cb3;
+  --brand-blue-2: #0e5f9d;
+
+  /* Generic */
+  --text-dark: rgba(20,24,32,.92);
+
+  /* Glass (light) */
+  --glass-bg: rgba(255,255,255,.10);
+  --glass-bg-2: rgba(255,255,255,.14);
+  --glass-border: rgba(255,255,255,.22);
+  --glass-text: rgba(255,255,255,.92);
+  --glass-shadow: 0 18px 60px rgba(0,0,0,.22);
+
+  /* Glass (dark drawer) */
+  --drawer-bg-1: rgba(8,12,18,.92);
+  --drawer-bg-2: rgba(10,16,24,.84);
+  --drawer-border: rgba(255,255,255,.10);
+  --drawer-shadow: 0 18px 60px rgba(0,0,0,.45);
+}
+
+/* ============================================================
+   БЛОК ФИЛЬТРОВ ЛАБОРАТОРИИ
+   ============================================================ */
+
+.lab-filters .card-body{
+  padding: 1rem;
+  overflow: hidden;
+}
+
+.lab-filters .input-group .form-control{
+  border-left: 0;
+}
+
+.lab-filters .input-group .input-group-text{
+  border-right: 0;
+  background: #fff;
+}
+
+.lab-filters .badge{
+  border-radius: .5rem;
+}
+
+/* Список категорий */
+
+.lab-cat-list .list-group-item{
+  padding: .55rem .75rem;
+  border-left: 0;
+  border-right: 0;
+}
+
+.lab-cat-list .list-group-item:first-child{
+  border-top: 0;
+}
+
+.lab-cat-list .list-group-item.active{
+  background-color: #136bad;
+  color: #fff;
+  border-color: #136bad;
+}
+
+.lab-cat-list .list-group-item.active .badge{
+  background: rgba(255,255,255,.15);
+  color: #fff;
+  border-color: transparent;
+}
+
+.lab-cat-list .text-truncate{
+  max-width: 12rem;
+}
+
+/* Сдвигаем sticky поверх фоновых секций */
+@media (min-width: 992px){
+  .sticky-top{ z-index: 1010; }
+}
+
+/* Сеточный режим карточки */
+.lab-panel--grid .vertical-divider{
+  display: none !important;
+}
+
+.lab-panel--grid .card-inner{
+  grid-template-columns: 1fr !important;
+  padding: .5rem 0 !important;
+}
+
+.lab-panel--grid .price-col{
+  width: 100% !important;
+  background: none !important;
+  padding: .5rem 0 !important;
+  justify-content: flex-start !important;
+  text-align: left !important;
+}
+
+.lab-panel--grid .horizontal-divider{
+  left: 0;
+  right: 0;
+}
+
+/* Узкие экраны */
+@media (max-width: 575.98px){
+  .lab-filters .chip .chip-text{ max-width: 100%; }
+}
+
+/* Активные фильтры-чипсы */
+.active-filters{
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.active-filters .badge{
+  border-radius: .5rem;
+  max-width: 100%;
+}
+
+.active-filters .chip-text{
+  display: inline-block;
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 575.98px){
+  .active-filters .chip-text{ max-width: 100%; }
+}
+
+/* ============================================================
+   TOPBAR / HEADER — GLASS STYLE (DESKTOP + MOBILE)
+   ============================================================ */
+
+/* Topbar: стекло (вместо синей заливки) */
+.top.bg-black{
+  background: #116cb3 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none;
+}
+
+/* Пусть не режет выпадашки */
+.bg-black.top,
+.bg-black.top .container{
+  overflow: visible !important;
+  position: relative;
+}
+
+/* Office select in topbar (glass) */
+.bg-black.top .office-select{
+  height: 28px;
+  min-width: 160px;
+  padding: 0 34px 0 12px;
+
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1;
+
+  color: #fff;
+
+  background: linear-gradient(
+    180deg,
+    rgba(17,108,179,.22),
+    rgba(255,255,255,.08)
+  );
+
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.28);
+
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #ffffffcc 50%),
+    linear-gradient(135deg, #ffffffcc 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 11px,
+    calc(100% - 12px) 11px;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+
+  cursor: pointer;
+  transition:
+    background-color .15s ease,
+    border-color .15s ease,
+    box-shadow .15s ease,
+    transform .08s ease;
+
+  box-shadow: 0 6px 18px rgba(0,0,0,.18);
+}
+
+.bg-black.top .office-select:hover,
+.bg-black.top .office-select:focus{
+  background: linear-gradient(
+    180deg,
+    rgba(17,108,179,.32),
+    rgba(255,255,255,.12)
+  );
+  border-color: rgba(255,255,255,.45);
+  box-shadow: 0 8px 22px rgba(0,0,0,.22);
+  outline: none;
+}
+
+.bg-black.top .office-select:active{
+  transform: translateY(1px);
+}
+
+.bg-black.top .office-select option{
+  background-color: #0f1720;
+  color: #fff;
+  font-weight: 550;
+}
+
+.bg-black.top .d-flex.align-items-center select.office-select{
+  flex-shrink: 0;
+  align-self: center;
+}
+
+@media (max-width: 767.98px){
+  .bg-black.top .office-select{
+    height: 32px;
+    font-size: 12.5px;
+    padding-left: 10px;
+  }
+}
+
+/* ============================================================
+   NAVBAR (DESKTOP) — GLASS (instead of solid blue)
+   Applies to the main menu bar with logo + "Результаты анализов" button
+   ============================================================ */
+
+@media (min-width: 992px){
+  /* Make the main navbar glass */
+  .ftco-navbar-light{
+    background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.06)) !important;
+    border-bottom: 1px solid rgba(255,255,255,.16);
+    box-shadow: 0 10px 30px rgba(0,0,0,.14);
+
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+
+    transition: background-color .25s ease, box-shadow .25s ease, border-color .25s ease;
+  }
+
+  /* On scroll: slightly stronger glass */
+  .ftco-navbar-light.scrolled{
+    background: linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.08)) !important;
+    border-bottom-color: rgba(255,255,255,.22);
+    box-shadow: 0 14px 40px rgba(0,0,0,.18);
+  }
+
+  /* Keep nav links readable on glass */
+  .ftco-navbar-light .navbar-nav .nav-link,
+  .ftco-navbar-light .navbar-brand,
+  .ftco-navbar-light .navbar-toggler,
+  .ftco-navbar-light .navbar-toggler .oi{
+    color: rgba(255,255,255,.92) !important;
+  }
+
+  /* Make dropdown menus not clipped by any parents */
+  .ftco-navbar-light,
+  .ftco-navbar-light .container{
+    overflow: visible !important;
+  }
+
+  /* If you use sticky navbar, keep it above content */
+  .ftco-navbar-light{ z-index: 1020; }
+}
+
+/* =========================================================
+   CHAT WIDGET— CORPORATE GLASS (#116cb3)
+   ========================================================= */
+
+:root{
+  --cw-z: 2147483000;
+  --cw-radius: 18px;
+
+  --cw-brand: #116cb3;
+
+  --cw-border: rgba(255,255,255,.22);
+  --cw-glass: rgba(255,255,255,.10);
+  --cw-brand-glass: rgba(17,108,179,.18);
+
+  --cw-shadow: 0 18px 60px rgba(0,0,0,.22);
+  --cw-text: rgba(20,24,32,.92);
+}
+
+/* SAFETY */
+#chat-widget,
+#chat-widget *{ box-sizing: border-box; }
+
+/* ROOT */
+#chat-widget{
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: var(--cw-z);
+
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  color: var(--cw-text);
+  pointer-events: auto;
+}
+
+/* FAB */
+#chat-fab{
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  cursor: pointer;
+
+  background: linear-gradient(135deg, var(--cw-brand), rgba(17,108,179,.88));
+  color: #fff;
+
+  border: 1px solid rgba(255,255,255,.35);
+  box-shadow: var(--cw-shadow);
+
+  display: grid;
+  place-items: center;
+
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Badge */
+#chat-fab .chat-fab-badge{
+  position: absolute;
+  top: -6px;
+  right: -6px;
+
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+
+  border-radius: 999px;
+  background: #ff3b30;
+  color: #fff;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+
+  box-shadow: 0 10px 26px rgba(0,0,0,.25);
+  border: 1px solid rgba(255,255,255,.35);
+}
+
+/* Pulse */
+#chat-fab.chat-fab--pulse::after{
+  content:"";
+  position:absolute;
+  inset:-6px;
+  border-radius:999px;
+  border:2px solid rgba(17,108,179,.35);
+  animation: cwPulse 1.2s ease-in-out infinite;
+}
+@keyframes cwPulse{
+  0%{ transform: scale(.92); opacity:.55; }
+  70%{ transform: scale(1.12); opacity:0; }
+  100%{ transform: scale(1.12); opacity:0; }
+}
+
+/* PANEL */
+#chat-widget .chat-panel{
+  position: absolute;
+  right: 0;
+  bottom: 72px;
+
+  width: min(360px, calc(100vw - 24px));
+  height: min(520px, calc(100vh - 140px));
+
+  border-radius: var(--cw-radius);
+  border: 1px solid var(--cw-border);
+
+  background: linear-gradient(180deg, var(--cw-brand-glass), var(--cw-glass));
+  backdrop-filter: blur(18px) saturate(155%);
+  -webkit-backdrop-filter: blur(18px) saturate(155%);
+
+  box-shadow: var(--cw-shadow);
+  overflow: hidden;
+
+  display: grid;
+  grid-template-rows: 54px minmax(0,1fr);
+
+  opacity: 0;
+  transform: translateY(10px) scale(.98);
+  pointer-events: none;
+  transition: opacity .18s ease, transform .18s ease;
+}
+
+#chat-widget .chat-panel.open{
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+/* HEADER */
+#chat-widget .chat-widget-header{
+  height: 54px;
+  padding: 0 12px 0 14px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  background: var(--cw-brand);
+  color: #fff;
+
+  border-bottom: 1px solid rgba(255,255,255,.25);
+}
+
+#chat-widget .chat-widget-header span{
+  font-size: 14px;
+  font-weight: 650;
+}
+
+/* Close */
+#chat-widget .chat-widget-toggle{
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid rgba(255,255,255,.30);
+  background: rgba(255,255,255,.12);
+  color: #fff;
+
+  cursor: pointer;
+  font-size: 18px;
+}
+
+/* BODY */
+#chat-widget .chat-widget-body{
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* MESSAGES */
+#chat-messages{
+  flex: 1 1 auto;
+  padding: 14px 12px;
+
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-msg{ display:flex; }
+
+.chat-msg__bubble{
+  max-width: 82%;
+  padding: 10px 12px;
+
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.35;
+
+  background: rgba(255,255,255,.16);
+  border: 1px solid rgba(255,255,255,.22);
+}
+
+.chat-msg--visitor{ justify-content: flex-end; }
+.chat-msg--operator{ justify-content: flex-start; }
+.chat-msg--system{ justify-content: center; }
+
+.chat-msg--success .chat-msg__bubble{
+  background: rgba(80,200,120,.14);
+  border-color: rgba(80,200,120,.45);
+}
+.chat-msg--error .chat-msg__bubble{
+  background: rgba(255,90,90,.14);
+  border-color: rgba(255,90,90,.45);
+}
+
+.chat-msg__author{
+  font-size: 10.5px;
+  font-weight: 700;
+  opacity: .72;
+  margin-bottom: 4px;
+}
+
+/* Meta (author + time) */
+#chat-widget .chat-msg__meta{
+  display:flex;
+  gap:8px;
+  align-items:baseline;
+  margin-bottom:4px;
+}
+#chat-widget .chat-msg__time{
+  margin-left:auto;
+  font-size:10.5px;
+  font-weight:700;
+  opacity:.58;
+  letter-spacing:.2px;
+  line-height:1.15;
+}
+
+/* FORM */
+#chat-form{
+  padding: 10px 12px 12px;
+  border-top: 1px solid rgba(255,255,255,.18);
+
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#chat-input{
+  width: 100%;
+  min-height: 42px;
+  max-height: 110px;
+
+  padding: 11px 12px;
+  border-radius: 14px;
+
+  background: rgba(255,255,255,.22);
+  border: 1px solid rgba(255,255,255,.24);
+
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--cw-text);
+
+  resize: none;
+  outline: none;
+}
+
+#chat-input:focus{
+  border-color: rgba(255,255,255,.36);
+  box-shadow: 0 0 0 4px rgba(255,255,255,.10);
+}
+
+.chat-send-btn{
+  height: 42px;
+  border-radius: 14px;
+
+  background: var(--cw-brand) !important;
+  color: #fff !important;
+  border: 0 !important;
+  font-weight: 650;
+}
+
+/* MOBILE */
+@media (max-width: 480px){
+  #chat-widget{
+    right: max(10px, env(safe-area-inset-right));
+    bottom: max(10px, env(safe-area-inset-bottom));
+  }
+  #chat-widget .chat-panel{
+    width: calc(100vw - 20px);
+    height: min(75vh, 560px);
+  }
+  #chat-input{
+    font-size: 16px; /* iOS no-zoom fix */
+  }
+}
+
+/* BOOTSTRAP SAFETY: chat under modals */
+body.modal-open #chat-widget{
+  z-index: 1030 !important; /* below backdrop(1040) */
+  pointer-events: none !important;
+}
+body.modal-open #chat-widget .chat-panel{
+  pointer-events: none;
+  opacity: 0.15;
+}
+
+/* FALLBACK (no backdrop-filter) */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){
+  #chat-widget .chat-panel{ background: rgba(255,255,255,.96); }
+}
+
+/* =========================================================
+   ASSISTANT (navigator) + CARDS
+   ========================================================= */
+
+.assistant-msg .chat-msg__bubble{
+  background: rgba(240, 244, 255, 0.92);
+  border: 1px solid rgba(17,108,179, 0.25);
+  box-shadow: 0 10px 28px rgba(0,0,0,.08);
+}
+.assistant-msg,
+.assistant-msg *{ color: #000 !important; }
+
+.assistant-msg .assistant-cards{
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.assistant-card{
+  display: block;
+  padding: 10px 12px;
+  border-radius: 12px;
+  text-decoration: none;
+
+  background: rgba(255,255,255, 0.98);
+  border: 1px solid rgba(0,0,0, 0.08);
+  box-shadow: 0 2px 8px rgba(0,0,0, .06);
+
+  transition: transform .12s ease, box-shadow .12s ease, background-color .12s ease, border-color .12s ease;
+}
+.assistant-card:hover{
+  background: rgba(243, 246, 255, 1);
+  border-color: rgba(17,108,179, 0.30);
+  box-shadow: 0 6px 16px rgba(0,0,0, .10);
+  transform: translateY(-1px);
+}
+.assistant-card__title{
+  font-weight: 800;
+  margin-bottom: 4px;
+  color: #000;
+}
+.assistant-card__snippet{
+  font-size: 12px;
+  line-height: 1.35;
+  color: #222;
+  opacity: 0.95;
+  margin-bottom: 6px;
+}
+.assistant-card__meta{
+  font-size: 11px;
+  color: #555;
+  opacity: 0.9;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+
+/* TEST CARD */
+.test-card{
+  display:block;
+  padding:12px 14px;
+  border-radius:14px;
+  text-decoration:none;
+
+  background: rgba(255,255,255,.98);
+  border:1px solid rgba(0,0,0,.08);
+  box-shadow:0 4px 14px rgba(0,0,0,.08);
+
+  transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+}
+.test-card:hover{
+  transform: translateY(-1px);
+  box-shadow:0 10px 28px rgba(0,0,0,.12);
+  border-color: rgba(17,108,179,.35);
+}
+.test-card__header{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:10px;
+}
+.test-card__title{
+  font-size:15px;
+  font-weight:800;
+  color:#000;
+}
+.test-card__code{
+  font-size:11px;
+  font-weight:800;
+  color:#116cb3;
+  opacity:.75;
+  letter-spacing:.04em;
+}
+.test-card__subtitle{
+  margin-top:4px;
+  font-size:12.5px;
+  line-height:1.35;
+  color:#222;
+  opacity:.9;
+}
+.test-card__divider{
+  height:1px;
+  background: linear-gradient(to right, rgba(17,108,179,.45), rgba(17,108,179,.05));
+  margin:8px 0;
+}
+.test-card__actions{
+  display:flex;
+  gap:12px;
+  font-size:12px;
+  color:#000;
+  opacity:.9;
+}
+.test-card__action{
+  white-space:nowrap;
+  font-weight:650;
+}
+
+/* =========================================================
+   MOBILE: GLASS NAVBAR + PREMIUM DRAWER + COMPACT MENU
+   ========================================================= */
+
+@media (max-width: 991.98px){
+
+  /* Navbar becomes glass (instead of black/white theme defaults) */
+  .ftco-navbar-light{
+    background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.06)) !important;
+    border-bottom: 1px solid rgba(255,255,255,.16);
+    box-shadow: 0 10px 30px rgba(0,0,0,.14);
+
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+
+    transition: background-color .2s ease, box-shadow .2s ease, border-color .2s ease;
+  }
+
+  /* On scroll: slightly stronger glass (“полутон”) */
+  .ftco-navbar-light.scrolled{
+    background: linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.08)) !important;
+    border-bottom-color: rgba(255,255,255,.22);
+    box-shadow: 0 14px 40px rgba(0,0,0,.18);
+  }
+
+  /* Burger icon */
+  .ftco-navbar-light .navbar-toggler,
+  .ftco-navbar-light .navbar-toggler .oi{
+    color: var(--glass-text) !important;
+  }
+
+  /* Logo size */
+  .ftco-navbar-light .navbar-brand img{
+    width: 160px !important;
+    max-width: 65vw;
+    height: auto;
+  }
+
+  /* Drawer (collapse) */
+  #ftco-nav.navbar-collapse{
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 18px;
+
+    max-height: calc(100vh - 92px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+
+    background: linear-gradient(180deg, var(--drawer-bg-1), var(--drawer-bg-2));
+    border: 1px solid var(--drawer-border);
+
+    backdrop-filter: blur(10px) saturate(130%);
+    -webkit-backdrop-filter: blur(10px) saturate(130%);
+
+    box-shadow: var(--drawer-shadow);
+  }
+
+  /* Nav links compact */
+  .ftco-navbar-light .navbar-nav{
+    padding-top: 2px !important;
+    padding-bottom: 6px !important;
+  }
+  .ftco-navbar-light .navbar-nav .nav-item{ margin: 0 !important; }
+
+  .ftco-navbar-light .navbar-nav .nav-link{
+    padding: 9px 12px !important;
+    margin: 4px 2px !important;
+
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: .01em;
+
+    color: rgba(255,255,255,.92) !important;
+
+    border-radius: 12px;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.08);
+
+    transition: transform .12s ease, background-color .12s ease, box-shadow .12s ease;
+  }
+  .ftco-navbar-light .navbar-nav .nav-link:hover{
+    background: rgba(255,255,255,.09);
+    box-shadow: 0 14px 34px rgba(0,0,0,.30);
+    transform: translateY(-1px);
+  }
+
+  /* CTA premium primary */
+  .ftco-navbar-light .navbar-nav > .nav-item.cta > a{
+    padding: 10px 12px !important;
+    background: linear-gradient(135deg, var(--brand-blue), rgba(17,108,179,.88)) !important;
+    border: 1px solid rgba(255,255,255,.14) !important;
+    box-shadow: 0 18px 50px rgba(17,108,179,.28);
+  }
+}
+
+/* =========================================================
+   MOBILE: INLINE PANEL (icons + one-line controls) + ACCOUNT DROPDOWN
+   ========================================================= */
+
+@media (max-width: 991.98px){
+
+  .nav-mobile-panel{
+    padding: .55rem .55rem .65rem;
+    margin-bottom: .55rem;
+    border-bottom: 1px solid rgba(255,255,255,.10);
+  }
+
+  .nav-mobile-inline{
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+  }
+
+  .nav-mobile-line{
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+  }
+
+  .nav-mobile-line--right{
+    justify-content: flex-end;
+  }
+
+  .nav-mobile-ico{
+    color: rgba(255,255,255,.92);
+    font-size: 18px;
+    line-height: 1;
+    flex: 0 0 auto;
+    opacity: .95;
+  }
+
+  /* Office select (one line) */
+  .office-select--mobile{
+    width: 100%;
+    min-width: 0 !important;
+    height: 36px;
+    border-radius: 12px;
+    padding: 0 .65rem;
+
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.12);
+    box-shadow: 0 8px 22px rgba(0,0,0,.22);
+  }
+
+  /* Phone link (one line) */
+  .nav-mobile-compact-link{
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+
+    width: 100%;
+    padding: .45rem .6rem;
+    border-radius: 12px;
+
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.12);
+    box-shadow: 0 8px 22px rgba(0,0,0,.22);
+
+    color: #fff !important;
+    text-decoration: none !important;
+
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .nav-mobile-compact-link:active{
+    transform: translateY(1px);
+  }
+
+  /* Account icon button */
+  .nav-mobile-iconbtn{
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+
+    background: rgba(255,255,255,.10) !important;
+    border: 1px solid rgba(255,255,255,.16) !important;
+    box-shadow: 0 10px 28px rgba(0,0,0,.24);
+
+    color: #fff !important;
+    padding: 0 !important;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .nav-mobile-iconbtn.dropdown-toggle::after{
+    display: none !important; /* чистая иконка без caret */
+  }
+
+  /* Dropdown menu (glass dark) */
+  .nav-mobile-dropdown-menu{
+    margin-top: 10px;
+    min-width: 210px;
+
+    background: linear-gradient(180deg, rgba(8,12,18,.92), rgba(10,16,24,.88));
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 16px;
+
+    box-shadow: 0 18px 60px rgba(0,0,0,.40);
+    backdrop-filter: blur(10px) saturate(130%);
+    -webkit-backdrop-filter: blur(10px) saturate(130%);
+    overflow: hidden;
+  }
+
+  .nav-mobile-dropdown-menu .dropdown-item,
+  .nav-mobile-dropdown-menu .dropdown-item-text{
+    color: rgba(255,255,255,.92);
+    font-weight: 700;
+    font-size: 14px;
+    padding: .55rem .85rem;
+  }
+
+  .nav-mobile-dropdown-menu .dropdown-item:hover{
+    background: rgba(255,255,255,.08);
+    color: #fff;
+  }
+
+  .nav-mobile-dropdown-menu .dropdown-divider{
+    border-top: 1px solid rgba(255,255,255,.10);
+  }
+
+  .nav-mobile-user{
+    opacity: .9;
+  }
+
+  /* Bootstrap dropdown inside collapse: ensure visible above drawer */
+  #ftco-nav .dropdown-menu{
+    z-index: 2147482500;
+  }
+}
+
+
+/* ============================================================
+   NAVBAR TEXT COLOR FIX — dark text on glass
+   ============================================================ */
+
+@media (min-width: 992px){
+  .ftco-navbar-light .navbar-nav .nav-link,
+  .ftco-navbar-light .navbar-brand{
+    color: #111 !important;
+  }
+
+  .ftco-navbar-light .navbar-nav .nav-link:hover,
+  .ftco-navbar-light .navbar-nav .nav-link:focus{
+    color: #000 !important;
+  }
+}
+
+/* Mobile navbar text */
+.ftco-navbar-light .navbar-nav .nav-link{
+  color: #111 !important;
+}

@@ -1,0 +1,94 @@
+/* =========================================================
+   COOKIE BANNER — CORPORATE GLASS (#116cb3)
+   ========================================================= */
+
+#cookie-banner{
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(120%);
+  z-index: 9998;
+
+  display: flex;
+  align-items: center;
+  gap: 16px;
+
+  max-width: min(720px, calc(100vw - 32px));
+  padding: 14px 18px;
+
+  font-size: 14px;
+  line-height: 1.4;
+
+  color: #ffffff;
+  background: linear-gradient(
+    135deg,
+    rgba(17,108,179,.92),
+    rgba(17,108,179,.78)
+  );
+
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.25);
+  box-shadow: 0 16px 40px rgba(0,0,0,.25);
+
+  transition: transform .55s cubic-bezier(.22,1,.36,1);
+}
+
+#cookie-banner.show{
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Текст */
+#cookie-banner span{
+  flex: 1 1 auto;
+  opacity: .95;
+}
+
+/* Ссылка */
+#cookie-banner a{
+  color: #ffffff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  opacity: .9;
+}
+#cookie-banner a:hover{
+  opacity: 1;
+}
+
+/* Кнопка */
+#accept-cookies{
+  flex: 0 0 auto;
+
+  padding: 8px 16px;
+  border-radius: 12px;
+
+  background: rgba(255,255,255,.18);
+  color: #ffffff;
+
+  border: 1px solid rgba(255,255,255,.35);
+  font-weight: 500;
+  cursor: pointer;
+
+  transition: background .25s ease, transform .2s ease;
+}
+
+#accept-cookies:hover{
+  background: rgba(255,255,255,.28);
+  transform: translateY(-1px);
+}
+
+/* Mobile */
+@media (max-width: 600px){
+  #cookie-banner{
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+    gap: 12px;
+  }
+
+  #accept-cookies{
+    width: 100%;
+  }
+}
