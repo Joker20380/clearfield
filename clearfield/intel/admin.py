@@ -1,6 +1,5 @@
 from django.contrib import admin
-from .models import Source, FetchLog, RawItem, Article
-
+from .models import Source, FetchLog, RawItem, Article, Event, EventItem
 
 
 @admin.register(Source)
@@ -63,4 +62,18 @@ class ArticleAdmin(admin.ModelAdmin):
     has_error.short_description = "Error"
 
 
+class EventItemInline(admin.TabularInline):
+    model = EventItem
+    extra = 0
+    autocomplete_fields = ("item",)
+
+@admin.register(Event)
+class EventAdmin(admin.ModelAdmin):
+    list_display = ("id", "evidence_level", "region", "topic", "short_title", "updated_at")
+    list_filter = ("evidence_level", "region", "topic")
+    search_fields = ("title", "summary", "cluster_key")
+    inlines = [EventItemInline]
+
+    def short_title(self, obj):
+        return (obj.title or "")[:80]
 

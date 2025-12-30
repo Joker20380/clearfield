@@ -100,3 +100,41 @@ class Article(models.Model):
 
     def __str__(self) -> str:
         return f"Article for item {self.item_id}"
+
+
+class Event(models.Model):
+    EVIDENCE_CHOICES = [
+        (0, "0: anonymous/insider"),
+        (1, "1: media reprints"),
+        (2, "2: has primary source"),
+        (3, "3: multi-class confirmation"),
+    ]
+
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    # простая “витрина события”
+    title = models.TextField(blank=True)
+    summary = models.TextField(blank=True)
+
+    # классификация (можно тянуть из Source/RawItem)
+    region = models.CharField(max_length=16, blank=True)
+    topic = models.CharField(max_length=16, blank=True)
+
+    evidence_level = models.IntegerField(choices=EVIDENCE_CHOICES, default=1)
+
+    # для дедупа/склейки
+    cluster_key = models.CharField(max_length=64, db_index=True, unique=True)
+
+    def __str__(self):
+        return f"Event #{self.id} L{self.evidence_level}: {self.title[:60]}"
+
+
+class EventItem(models.Model):
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="items")
+    item = models.OneToOneField("intel.RawItem", on_delete=models.CASCADE, related_name="event_item")
+
+    created_at = models.DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return f"EventItem event={self.event_id} item={self.item_id}"
