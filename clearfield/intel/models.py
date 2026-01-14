@@ -138,3 +138,6 @@ class EventItem(models.Model):
 
     def __str__(self):
         return f"EventItem event={self.event_id} item={self.item_id}"
+        
+    class Meta:
+    	indexes = [models.Index(fields=["event", "-created_at"]),]

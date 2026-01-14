@@ -1,288 +1,310 @@
 # clearfield/intel/management/commands/cluster_events.py
-from __future__ import annotations
 
 import hashlib
-import re
-from collections import defaultdict
+import time
 from dataclasses import dataclass
-from datetime import timedelta
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from django.core.management.base import BaseCommand
-from django.db import transaction
-from django.db.models import Q
+from django.db import IntegrityError, OperationalError, transaction
+from django.db.transaction import TransactionManagementError
+from django.db import close_old_connections
 from django.utils import timezone
 
-from intel.models import Article, Event, EventItem, RawItem
-
-
-# -----------------------------
-# Text cleanup / tokenization
-# -----------------------------
-NOISE_PHRASES = [
-    "One of your browser extensions seems to be blocking the video player",
-    "To watch this content, you may need to disable it on this site",
-    "Follow our liveblog",
-    "for all the latest developments.",
-    "for all the latest updates.",
-    "from loading.",
-    "from loading. .",
-    "from loading. . from loading.",
-]
-
-NOISE_RE = [
-    r"\bLive:\s*",
-    r"\bFollow (our )?liveblog.*$",
-    r"\bfrom loading\.(\s*\.)*",
-]
-
-WORD_RE = re.compile(r"[a-zA-Z0-9]+", re.UNICODE)
-
-
-def sanitize(text: str) -> str:
-    t = (text or "").strip()
-    for p in NOISE_PHRASES:
-        t = t.replace(p, " ")
-    for rx in NOISE_RE:
-        t = re.sub(rx, " ", t, flags=re.IGNORECASE)
-    t = re.sub(r"\s+", " ", t).strip()
-    return t
-
-
-def tokenize(text: str) -> List[str]:
-    # Lower + keep only word-ish tokens
-    t = sanitize(text).lower()
-    return WORD_RE.findall(t)
-
-
-# -----------------------------
-# SimHash (64-bit)
-# -----------------------------
-def _hash64(token: str) -> int:
-    # Stable 64-bit from md5 (fast + stable)
-    h = hashlib.md5(token.encode("utf-8")).digest()
-    return int.from_bytes(h[:8], byteorder="big", signed=False)
-
-
-def simhash64(tokens: Iterable[str]) -> int:
-    # Classic SimHash: signed bit weights
-    v = [0] * 64
-    for tok in tokens:
-        x = _hash64(tok)
-        for i in range(64):
-            bit = (x >> i) & 1
-            v[i] += 1 if bit else -1
-    out = 0
-    for i in range(64):
-        if v[i] >= 0:
-            out |= (1 << i)
-    return out
-
-
-def hamming64(a: int, b: int) -> int:
-    return (a ^ b).bit_count()
-
-
-def sh64_key(h: int) -> str:
-    # compact stable cluster key
-    return f"sh64:{h:016x}"
+from intel.models import Event, EventItem, RawItem
 
 
 # -----------------------------
 # Helpers
 # -----------------------------
-def pick_title(raw: RawItem, art: Optional[Article]) -> str:
-    # Prefer article title, fallback raw title
-    t = (art.title if art else "") or raw.title or ""
-    t = sanitize(t)
-    return t[:300]
+
+def _sha1(s: str) -> str:
+    return hashlib.sha1(s.encode("utf-8", errors="ignore")).hexdigest()
 
 
-def pick_region_topic(raw: RawItem) -> Tuple[str, str]:
-    # If you have source.region/topic in your Source model, try it.
-    # Otherwise keep blanks.
-    region = ""
-    topic = ""
-    src = getattr(raw, "source", None)
-    if src is not None:
-        region = getattr(src, "region", "") or ""
-        topic = getattr(src, "topic", "") or ""
-    return (region[:16], topic[:16])
+def build_cluster_key(raw: RawItem) -> str:
+    """
+    Stable cluster_key. Prefer item_hash if you already compute it in ingest.
+    Fallback to url; final fallback to guid/title/published_at.
+    """
+    if getattr(raw, "item_hash", None):
+        return f"ih:{raw.item_hash}"
+
+    url = (raw.url or "").strip()
+    if url:
+        return f"url:{_sha1(url)}"
+
+    guid = (raw.guid or "").strip()
+    if guid:
+        return f"gid:{_sha1(guid)}"
+
+    base = f"{(raw.title or '').strip()}|{raw.published_at or ''}|{raw.source_id or ''}"
+    return f"fb:{_sha1(base)}"
 
 
-def best_text(raw: RawItem, art: Optional[Article]) -> str:
-    # Prefer extracted article text, fallback raw summary/title/url
-    t = (art.text if art else "") or ""
-    if t:
-        return t
-    return " ".join([raw.title or "", raw.summary or "", raw.url or ""]).strip()
+def db_retry(fn, label: str, stdout=None, retries: int = 3, base_sleep: float = 0.6):
+    """
+    Retry for standalone DB operations (NO atomic inside fn).
+    """
+    last_exc = None
+    for i in range(retries):
+        try:
+            close_old_connections()
+            return fn()
+        except OperationalError as e:
+            last_exc = e
+            if stdout:
+                stdout.write(f"[cluster_events] {label} OperationalError: {e} (retry {i+1}/{retries})")
+            time.sleep(base_sleep * (i + 1))
+    if last_exc:
+        raise last_exc
+    return fn()
+
+
+def atomic_retry(fn, label: str, stdout=None, retries: int = 3, base_sleep: float = 0.8):
+    """
+    Retry around a FULL atomic block. If connection drops inside, the transaction is broken.
+    We must exit atomic, close connections, and retry whole block.
+    """
+    last_exc = None
+    for i in range(retries):
+        try:
+            close_old_connections()
+            with transaction.atomic():
+                return fn()
+        except (OperationalError,) as e:
+            last_exc = e
+            try:
+                close_old_connections()
+            except Exception:
+                pass
+            if stdout:
+                stdout.write(f"[cluster_events] {label} OperationalError: {e} (retry {i+1}/{retries})")
+            time.sleep(base_sleep * (i + 1))
+        except TransactionManagementError as e:
+            last_exc = e
+            try:
+                close_old_connections()
+            except Exception:
+                pass
+            if stdout:
+                stdout.write(f"[cluster_events] {label} TransactionManagementError: {e} (retry {i+1}/{retries})")
+            time.sleep(base_sleep * (i + 1))
+
+    # last attempt без проглатывания
+    close_old_connections()
+    with transaction.atomic():
+        return fn()
+
+
+def isolate_inserts(model_cls, objs: List, label: str, stdout=None, stderr=None):
+    """
+    Debug helper: insert one-by-one to find offending row.
+    """
+    if stdout:
+        stdout.write(f"[cluster_events] ISOLATE {label}: inserting one-by-one ({len(objs)} rows)")
+    for idx, obj in enumerate(objs):
+        try:
+            close_old_connections()
+            obj.save(force_insert=True)
+        except Exception as e:
+            if stderr:
+                stderr.write(f"[cluster_events] ISOLATE {label} FAIL at idx={idx}: {type(e).__name__}: {e}")
+                stderr.write(f"[cluster_events] offending {label} __dict__: {getattr(obj, '__dict__', {})}")
+            raise
+    if stdout:
+        stdout.write(f"[cluster_events] ISOLATE {label}: OK")
 
 
 @dataclass
-class Candidate:
+class ClusterRow:
     raw_id: int
-    simh: int
+    cluster_key: str
     title: str
+    summary: str
     region: str
     topic: str
+    evidence_level: int
 
+
+# -----------------------------
+# Command
+# -----------------------------
 
 class Command(BaseCommand):
-    help = "Cluster extracted articles into Events (SimHash MVP, sanitized)"
+    help = "Cluster unlinked RawItem into Events and create EventItems."
 
     def add_arguments(self, parser):
-        parser.add_argument("--since-hours", type=int, default=24)
-        parser.add_argument("--limit", type=int, default=500)
-        parser.add_argument("--max-dist", type=int, default=3)
-        # Compatibility alias (optional UX): allow --hours same as --since-hours
-        parser.add_argument("--hours", type=int, default=None)
+        parser.add_argument("--dry-run", action="store_true", help="No writes, only counts.")
+        parser.add_argument("--batch-size", type=int, default=500)
 
-    def handle(self, *args, **opts):
-        since_hours = opts["since_hours"]
-        if opts.get("hours") is not None:
-            since_hours = int(opts["hours"])
+        # debug switches used in your console logs
+        parser.add_argument("--debug-insert", action="store_true", help="Try inserting a sample EventItem (no atomic).")
+        parser.add_argument("--debug-event-insert", action="store_true", help="Try inserting a sample Event (no atomic).")
+        parser.add_argument("--isolate-event", action="store_true", help="Insert Events one-by-one to find duplicates/invalid rows.")
 
-        limit = int(opts["limit"])
-        max_dist = int(opts["max_dist"])
+        # optional scope control
+        parser.add_argument("--limit", type=int, default=None, help="Limit number of unlinked RawItems processed (for stability).")
 
-        since = timezone.now() - timedelta(hours=since_hours)
+    def handle(self, *args, **options):
+        dry_run = options["dry_run"]
+        batch_size = options["batch_size"]
+        limit = options.get("limit")
 
-        # IMPORTANT: window by published_at (fallback to created_at if published_at is null)
-        raw_qs = (
-            RawItem.objects.filter(
-                Q(published_at__gte=since)
-                | Q(published_at__isnull=True, created_at__gte=since)
-            )
-            .order_by("-published_at", "-created_at")
-        )
-
+        # scope: only unlinked RawItem (OneToOne reverse name: raw.event_item)
+        unlinked_qs = RawItem.objects.filter(event_item__isnull=True).order_by("id")
         if limit:
-            raw_qs = raw_qs[:limit]
+            unlinked_ids = list(unlinked_qs.values_list("id", flat=True)[:limit])
+            unlinked_qs = RawItem.objects.filter(id__in=unlinked_ids).order_by("id")
 
-        raw_items: List[RawItem] = list(raw_qs)
-        if not raw_items:
-            self.stdout.write("Events upserted: 0, items linked: 0")
+        scope_count = db_retry(unlinked_qs.count, label="count unlinked", stdout=self.stdout)
+        self.stdout.write(f"[cluster_events] unlinked scope = {scope_count}")
+
+        if scope_count == 0:
+            self.stdout.write("[cluster_events] nothing to do")
             return
 
-        raw_ids = [r.id for r in raw_items]
+        # materialize raw items (avoid long server-side cursor)
+        def load_raws():
+            # only the fields we need; keep objects to access choices easily
+            return list(unlinked_qs.select_related().only(
+                "id", "title", "summary", "region", "topic", "published_at", "guid", "url", "item_hash"
+            ))
 
-        # Pull Article for these items (1:1 by item)
-        arts = Article.objects.filter(item_id__in=raw_ids)
-        art_by_item: Dict[int, Article] = {a.item_id: a for a in arts}
+        raws: List[RawItem] = db_retry(load_raws, label="load raws", stdout=self.stdout)
 
-        # Build candidates
-        cands: List[Candidate] = []
-        for r in raw_items:
-            a = art_by_item.get(r.id)
-            txt = best_text(r, a)
-            toks = tokenize(txt)
-            if len(toks) < 30:
-                # Too little signal; skip
-                continue
-            h = simhash64(toks)
-            region, topic = pick_region_topic(r)
-            cands.append(
-                Candidate(
+        # build clusters (here 1 raw => 1 cluster_key; if you want real merging later, do it in recluster_events)
+        rows: List[ClusterRow] = []
+        for r in raws:
+            ck = build_cluster_key(r)
+            rows.append(
+                ClusterRow(
                     raw_id=r.id,
-                    simh=h,
-                    title=pick_title(r, a),
-                    region=region,
-                    topic=topic,
+                    cluster_key=ck,
+                    title=(r.title or "").strip(),
+                    summary=(r.summary or "").strip(),
+                    region=(getattr(r, "region", "") or "").strip(),
+                    topic=(getattr(r, "topic", "") or "").strip(),
+                    evidence_level=1,
                 )
             )
 
-        if not cands:
-            self.stdout.write("Events upserted: 0, items linked: 0")
+        cluster_keys = sorted({x.cluster_key for x in rows})
+        self.stdout.write(f"[cluster_events] clusters = {len(cluster_keys)}")
+
+        # ---- debug modes ----
+        if options["debug_insert"]:
+            self.stdout.write("[cluster_events] DEBUG INSERT MODE (no atomic)")
+            sample = EventItem(event_id=None, item_id=None, created_at=timezone.now())
+            try:
+                sample.save(force_insert=True)
+            except Exception as e:
+                self.stderr.write(f"[cluster_events] ROOT ERROR: {type(e).__name__}: {e}")
+                self.stderr.write(f"[cluster_events] sample __dict__: {sample.__dict__}")
+                raise
             return
 
-        # Naive clustering: bucket by prefix to reduce comparisons
-        # (prefix = top 16 bits)
-        buckets: Dict[int, List[Candidate]] = defaultdict(list)
-        for c in cands:
-            prefix = (c.simh >> 48) & 0xFFFF
-            buckets[prefix].append(c)
+        if options["debug_event_insert"]:
+            self.stdout.write("[cluster_events] DEBUG EVENT INSERT (no atomic)")
+            sample_ev = Event(
+                title="debug event insert",
+                summary="",
+                region="",
+                topic="",
+                evidence_level=1,
+                cluster_key=f"debug:{_sha1(str(time.time()))}",
+            )
+            sample_ev.save(force_insert=True)
+            self.stdout.write("[cluster_events] sample Event insert OK")
+            return
 
-        # Fetch existing EventItem links to avoid relinking / integrity errors
-        already_linked = set(
-            EventItem.objects.filter(item_id__in=[c.raw_id for c in cands])
-            .values_list("item_id", flat=True)
-        )
+        # ---- DRY RUN ----
+        if dry_run:
+            self.stdout.write("[cluster_events] DRY RUN — no writes")
+            self.stdout.write(f"[cluster_events] would upsert Events: ~{len(cluster_keys)}")
+            self.stdout.write(f"[cluster_events] would create EventItems: {len(rows)}")
+            return
 
-        events_upserted = 0
-        items_linked = 0
+        # ---- Real work (atomic-with-retry) ----
 
-        # Load existing events for potential matches inside same prefix
-        # We match by hamming distance on simhash embedded in cluster_key "sh64:..."
-        # Note: This uses deterministic cluster keys (exact simhash). We still allow "near" match.
-        existing_events = list(Event.objects.all().only("id", "cluster_key", "title", "region", "topic", "evidence_level"))
-        existing_by_prefix: Dict[int, List[Tuple[Event, int]]] = defaultdict(list)
-        for ev in existing_events:
-            ck = ev.cluster_key or ""
-            if ck.startswith("sh64:"):
-                try:
-                    h = int(ck.split(":", 1)[1], 16)
-                except Exception:
+        # Build minimal lookup map raw_id -> cluster_key once
+        raw_to_key: Dict[int, str] = {x.raw_id: x.cluster_key for x in rows}
+        # Prepare Event candidates
+        events_to_create = [
+            Event(
+                title=x.title or "",         # allow empty, but prefer not
+                summary=x.summary or "",
+                region=x.region or "",
+                topic=x.topic or "",
+                evidence_level=x.evidence_level,
+                cluster_key=x.cluster_key,
+            )
+            for x in rows
+        ]
+
+        # Deduplicate Event objects by cluster_key (bulk_create would still be ok with ignore_conflicts,
+        # but we avoid sending duplicates in one batch)
+        uniq_events: Dict[str, Event] = {}
+        for ev in events_to_create:
+            if ev.cluster_key not in uniq_events:
+                uniq_events[ev.cluster_key] = ev
+        events_to_create = list(uniq_events.values())
+
+        if options["isolate_event"]:
+            # useful if you're hunting unique constraint collisions / invalid rows
+            isolate_inserts(Event, events_to_create, label="Event", stdout=self.stdout, stderr=self.stderr)
+            return
+
+        def unit_of_work():
+            # Step 1: Upsert Events by cluster_key
+            existing = {e.cluster_key: e for e in Event.objects.filter(cluster_key__in=cluster_keys)}
+
+            to_create = [ev for ev in events_to_create if ev.cluster_key not in existing]
+            if to_create:
+                # ignore_conflicts to handle races / pre-existing keys
+                Event.objects.bulk_create(to_create, batch_size=batch_size, ignore_conflicts=True)
+
+            # Re-fetch to get IDs for all keys
+            events_by_key = {e.cluster_key: e for e in Event.objects.filter(cluster_key__in=cluster_keys)}
+
+            # Step 2: Create EventItems (link RawItem -> Event)
+            # IMPORTANT: Do NOT bulk_update RawItem.event_item (it's reverse O2O and not concrete).
+            # Creating EventItem rows is the correct linkage.
+            existing_item_ids = set(
+                EventItem.objects.filter(item_id__in=list(raw_to_key.keys()))
+                .values_list("item_id", flat=True)
+            )
+
+            items_to_create = []
+            now = timezone.now()
+            for raw_id, ck in raw_to_key.items():
+                if raw_id in existing_item_ids:
                     continue
-                prefix = (h >> 48) & 0xFFFF
-                existing_by_prefix[prefix].append((ev, h))
-
-        @transaction.atomic
-        def upsert_one(c: Candidate):
-            nonlocal events_upserted, items_linked
-
-            if c.raw_id in already_linked:
-                return
-
-            prefix = (c.simh >> 48) & 0xFFFF
-
-            # Find nearest existing event in same prefix by hamming distance
-            best_ev = None
-            best_d = 10**9
-            for ev, h in existing_by_prefix.get(prefix, []):
-                d = hamming64(c.simh, h)
-                if d < best_d:
-                    best_d = d
-                    best_ev = ev
-
-            if best_ev is not None and best_d <= max_dist:
-                ev = best_ev
-                created = False
-            else:
-                # Create new event with deterministic key = exact simhash
-                key = sh64_key(c.simh)
-                ev, created = Event.objects.get_or_create(
-                    cluster_key=key,
-                    defaults=dict(
-                        title=c.title,
-                        summary="",
-                        region=c.region,
-                        topic=c.topic,
-                        evidence_level=1,
-                    ),
+                ev = events_by_key.get(ck)
+                if not ev:
+                    # should not happen; but keep resilient
+                    continue
+                items_to_create.append(
+                    EventItem(event_id=ev.id, item_id=raw_id, created_at=now)
                 )
-                if created:
-                    events_upserted += 1
-                    existing_by_prefix[prefix].append((ev, c.simh))
 
-            # Lightweight enrichment (don’t thrash fields)
-            changed = False
-            if c.region and not ev.region:
-                ev.region = c.region
-                changed = True
-            if c.topic and not ev.topic:
-                ev.topic = c.topic
-                changed = True
-            if c.title and (not ev.title or len(ev.title) < 20) and len(c.title) > len(ev.title or ""):
-                ev.title = c.title
-                changed = True
-            if changed:
-                ev.save(update_fields=["title", "region", "topic", "updated_at"])
+            if items_to_create:
+                EventItem.objects.bulk_create(items_to_create, batch_size=batch_size, ignore_conflicts=True)
 
-            # Link item to event (1:1 on item)
-            EventItem.objects.create(event=ev, item_id=c.raw_id)
-            items_linked += 1
+            return True
 
-        for c in cands:
-            upsert_one(c)
+        try:
+            atomic_retry(unit_of_work, label="atomic unit", stdout=self.stdout)
+        except IntegrityError as e:
+            self.stderr.write(f"[cluster_events] FAILED IntegrityError: {e}")
+            raise
+        except Exception as e:
+            self.stderr.write(f"[cluster_events] FAILED: {type(e).__name__}: {e}")
+            raise
 
-        self.stdout.write(f"Events upserted: {events_upserted}, items linked: {items_linked}")
+        # Post-check (outside atomic): how many left
+        def remaining_unlinked():
+            return RawItem.objects.filter(event_item__isnull=True).count()
+
+        remaining = db_retry(remaining_unlinked, label="remaining unlinked", stdout=self.stdout)
+        self.stdout.write(f"[cluster_events] DONE | eventitems_attempted={len(rows)} | unlinked(after)={remaining}")

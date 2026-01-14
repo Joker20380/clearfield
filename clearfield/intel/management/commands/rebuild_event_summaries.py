@@ -2,7 +2,6 @@ import re
 from datetime import timedelta
 
 from django.core.management.base import BaseCommand
-from django.db.models import Q
 from django.utils import timezone
 
 from intel.models import Event, EventItem, RawItem, Article
@@ -18,17 +17,22 @@ NOISE_PHRASES = [
     "Follow our liveblog",
     "for all the latest developments.",
     "for all the latest updates.",
+    "for the latest updates.",
+    "for the latest update.",
+    "To display this content from YouTube, you must enable advertisement tracking and audience measurement.",
+    "To display this content from YouTube, you must enable advertisement tracking and audience measurement",
 ]
 
 NOISE_RE = [
-    r"\bLive:\s*",                      # "Live:"
-    r"\bFollow (our )?liveblog.*$",      # tail like "Follow our liveblog ..."
-    r"\bfrom loading(?:\s*\.)*\b",       # "from loading." / "from loading. ."
+    r"\bLive:\s*",                                  # "Live:"
+    r"\bFollow (our )?liveblog.*$",                  # liveblog tail
+    r"\bfrom loading(?:\s*\.)*\b",                   # "from loading." / "from loading. ."
     r"\bblocking the video player from loading\b",
     r"\bOne of your browser extensions seems to be blocking the video player\b",
     r"\bTo watch this content, you may need to disable it on this site\b",
+    r"\bTo display this content from YouTube.*$",    # YouTube consent tail (variable)
+    r"\(FRANCE 24 with.*?\)$",                       # (FRANCE 24 with AP, AFP and Reuters)
 ]
-
 
 WORD_RE = re.compile(r"[A-Za-z0-9]+", re.UNICODE)
 
@@ -36,14 +40,23 @@ WORD_RE = re.compile(r"[A-Za-z0-9]+", re.UNICODE)
 def sanitize(text: str) -> str:
     t = (text or "").strip()
 
+    # remove exact noise phrases
     for p in NOISE_PHRASES:
         t = t.replace(p, " ")
 
+    # regex cleanup (case-insensitive)
     for rx in NOISE_RE:
         t = re.sub(rx, " ", t, flags=re.IGNORECASE | re.MULTILINE)
 
-    t = re.sub(r"\s+", " ", t).strip()
-    return t
+    # normalize whitespace
+    t = re.sub(r"\s+", " ", t)
+
+    # punctuation cleanup
+    t = re.sub(r"\.\s*\.", ".", t)                 # ". ." -> "."
+    t = re.sub(r"\s+([.,;:!?])", r"\1", t)         # "word ." -> "word."
+    t = re.sub(r"\.{3,}", "...", t)                # normalize ellipsis
+
+    return t.strip()
 
 
 def token_count(text: str) -> int:
@@ -67,6 +80,10 @@ def is_placeholder(clean_text: str, min_len: int = 140, min_tokens: int = 30) ->
 
 def pick_summary(text: str, title: str = "") -> str:
     t = sanitize(text)
+
+    # quality gate: don't generate summaries from near-empty text
+    if len(t) < 80:
+        return ""
 
     tt = (title or "").strip()
     if tt and t.lower().startswith(tt.lower()):

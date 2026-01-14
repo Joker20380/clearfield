@@ -128,6 +128,9 @@ USE_I18N = True
 USE_TZ = True
 
 
+DATABASES["default"]["CONN_MAX_AGE"] = 0
+
+
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
