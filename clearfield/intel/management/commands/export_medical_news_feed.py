@@ -1,0 +1,97 @@
+import json
+import secrets
+from pathlib import Path
+
+from django.core.management.base import BaseCommand
+from django.utils import timezone
+
+from intel.models import GeneratedMedicalNews
+
+
+TITLE_FIELDS = ["title", "headline", "name"]
+CONTENT_FIELDS = ["content", "body", "text", "article", "html"]
+
+
+def first_obj_value(obj, fields):
+    for field in fields:
+        if hasattr(obj, field):
+            value = getattr(obj, field) or ""
+            if value:
+                return str(value)
+    return ""
+
+
+def get_or_create_token(base_dir):
+    token_file = base_dir / ".medical_news_feed_token"
+
+    if token_file.exists():
+        return token_file.read_text(encoding="utf-8").strip()
+
+    token = secrets.token_hex(16)
+    token_file.write_text(token, encoding="utf-8")
+    return token
+
+
+class Command(BaseCommand):
+    help = "Export published GeneratedMedicalNews records to public JSON feed."
+
+    def add_arguments(self, parser):
+        parser.add_argument("--status", default="published")
+        parser.add_argument("--limit", type=int, default=20)
+        parser.add_argument("--public-dir", default="../generated-news")
+        parser.add_argument("--filename", default="")
+        parser.add_argument("--show-content-size", action="store_true")
+
+    def handle(self, *args, **options):
+        status = options["status"]
+        limit = options["limit"]
+        public_dir = Path(options["public_dir"]).resolve()
+        filename = options["filename"]
+
+        public_dir.mkdir(parents=True, exist_ok=True)
+
+        token = get_or_create_token(public_dir)
+
+        if not filename:
+            filename = f"medical-news-feed-{token}.json"
+
+        output_path = public_dir / filename
+
+        qs = GeneratedMedicalNews.objects.filter(status=status).order_by("id")[:limit]
+
+        items = []
+
+        for item in qs:
+            title = first_obj_value(item, TITLE_FIELDS)
+            content = first_obj_value(item, CONTENT_FIELDS)
+
+            if not title or not content:
+                self.stdout.write(self.style.WARNING(f"SKIP #{item.id}: empty title/content"))
+                continue
+
+            items.append({
+                "source_id": item.id,
+                "title": title,
+                "content": content,
+                "target_keyword": first_obj_value(item, ["target_keyword"]),
+                "theme": first_obj_value(item, ["theme", "angle"]),
+                "created_at": timezone.now().isoformat(),
+            })
+
+        payload = {
+            "source": "clearfield_generated_medical_news",
+            "created_at": timezone.now().isoformat(),
+            "items": items,
+        }
+
+        output_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+        self.stdout.write(self.style.SUCCESS(f"Exported: {len(items)}"))
+        self.stdout.write(f"Path: {output_path}")
+        self.stdout.write(f"Filename: {filename}")
+
+        if options["show_content_size"]:
+            self.stdout.write(f"Size: {output_path.stat().st_size} bytes")
