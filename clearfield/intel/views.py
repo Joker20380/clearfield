@@ -1,3 +1,5 @@
 from django.shortcuts import render
 
-# Create your views here.
+
+def guitar_tuner(request):
+    return render(request, "main/guitar_tuner.html")

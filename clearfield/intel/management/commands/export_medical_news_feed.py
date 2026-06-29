@@ -57,9 +57,12 @@ class Command(BaseCommand):
 
         output_path = public_dir / filename
 
-        qs = GeneratedMedicalNews.objects.filter(status=status).order_by("id")[:limit]
+        # Newest first. Take extra rows so duplicate titles do not reduce the final feed too much.
+        qs_limit = max(limit * 5, limit)
+        qs = GeneratedMedicalNews.objects.filter(status=status).order_by("-id")[:qs_limit]
 
         items = []
+        seen_titles = set()
 
         for item in qs:
             title = first_obj_value(item, TITLE_FIELDS)
@@ -69,14 +72,23 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING(f"SKIP #{item.id}: empty title/content"))
                 continue
 
+            title_key = " ".join(title.lower().split())
+            if title_key in seen_titles:
+                self.stdout.write(self.style.WARNING(f"SKIP #{item.id}: duplicate title"))
+                continue
+            seen_titles.add(title_key)
+
             items.append({
                 "source_id": item.id,
                 "title": title,
                 "content": content,
                 "target_keyword": first_obj_value(item, ["target_keyword"]),
                 "theme": first_obj_value(item, ["theme", "angle"]),
-                "created_at": timezone.now().isoformat(),
+                "created_at": item.created_at.isoformat() if getattr(item, "created_at", None) else timezone.now().isoformat(),
             })
+
+            if len(items) >= limit:
+                break
 
         payload = {
             "source": "clearfield_generated_medical_news",

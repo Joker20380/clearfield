@@ -34,7 +34,7 @@ NOISE_RE = [
     r"\(FRANCE 24 with.*?\)$",                       # (FRANCE 24 with AP, AFP and Reuters)
 ]
 
-WORD_RE = re.compile(r"[A-Za-z0-9]+", re.UNICODE)
+WORD_RE = re.compile(r"[A-Za-zА-Яа-яЁё0-9]+", re.UNICODE)
 
 
 def sanitize(text: str) -> str:
