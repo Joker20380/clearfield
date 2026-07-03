@@ -15,6 +15,10 @@ pkill -f "ssh .*127.0.0.1:${LOCAL_PORT}:127.0.0.1:${REMOTE_PORT}" || true
 
 ssh -fN \
   -p "${SSH_PORT}" \
+  -i "$HOME/.ssh/id_ed25519" \
+  -o IdentitiesOnly=yes \
+  -o BatchMode=yes \
+  -o PasswordAuthentication=no \
   -L "127.0.0.1:${LOCAL_PORT}:127.0.0.1:${REMOTE_PORT}" \
   -o ExitOnForwardFailure=yes \
   -o ServerAliveInterval=30 \

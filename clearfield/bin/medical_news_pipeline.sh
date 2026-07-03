@@ -39,6 +39,14 @@ echo "[3.5/10] Repair EventItem links"
 python3 manage.py repair_eventitems \
   --limit 2000
 
+echo "[3.7/10] Extract full article texts"
+python3 manage.py extract_articles \
+  --limit 80 \
+  --concurrency 5 \
+  --retries 2 \
+  --timeout 40 \
+  --allow-insecure-ssl
+
 echo "[4/10] Rebuild event summaries"
 python3 manage.py rebuild_event_summaries \
   --hours 720
@@ -55,6 +63,8 @@ python3 manage.py create_medical_briefs \
 
 echo "[6/10] Reject weak ready MedicalBrief items"
 python3 manage.py shell -c "
+import re
+
 from intel.models import MedicalBrief
 
 foreign = [
@@ -93,22 +103,86 @@ weak = [
     'призвание становится судьбой',
     'совет общественных организаций',
     'общественных организаций',
+
+    # definite non-medical local-news noise
+    'мурат гассиев',
+    'чемпионом мира по версии wba',
+    'осетинском театре',
+    'актерского спецкурса',
+    'спектакль «черная бурка»',
+    'летняя погода',
+    'внимание! перекрытие',
+    'расчистка русел рек',
+    'по ту сторону спортивных новостей',
+    'международном форуме по безопасности',
 ]
+
+def normalize_filter_text(value):
+    return ' '.join(
+        (value or '')
+        .lower()
+        .replace('ё', 'е')
+        .split()
+    )
+
+
+def contains_term(text, term):
+    term = normalize_filter_text(term)
+
+    if not term:
+        return False
+
+    # Короткие маркеры вроде СВО должны совпадать только как отдельное слово.
+    if re.fullmatch(r'[0-9a-zа-я]+', term) and len(term) <= 3:
+        pattern = (
+            rf'(?<![0-9a-zа-я])'
+            rf'{re.escape(term)}'
+            rf'(?![0-9a-zа-я])'
+        )
+        return re.search(pattern, text) is not None
+
+    return term in text
+
 
 bad = []
 
 for b in MedicalBrief.objects.filter(status='ready'):
-    text = ' '.join([
+    # Шумовую тематику проверяем только по заголовку и ракурсу.
+    # Случайная фраза внутри facts не должна отклонять медицинскую новость.
+    headline_text = normalize_filter_text(' '.join([
         b.title or '',
         b.angle or '',
-        b.facts or '',
-        b.region_text or '',
-        b.target_keyword or '',
-    ]).lower().replace('ё', 'е')
+    ]))
 
-    if any(x in text for x in foreign) or any(x in text for x in weak):
+    # Регион проверяем также по явно сохранённому region_text.
+    foreign_text = normalize_filter_text(' '.join([
+        b.title or '',
+        b.angle or '',
+        b.region_text or '',
+    ]))
+
+    foreign_hits = [
+        term for term in foreign
+        if contains_term(foreign_text, term)
+    ]
+
+    weak_hits = [
+        term for term in weak
+        if contains_term(headline_text, term)
+    ]
+
+    if foreign_hits or weak_hits:
         bad.append(b.id)
-        print('REJECT weak brief:', b.id, '|', b.title[:120])
+        print(
+            'REJECT weak brief:',
+            b.id,
+            'foreign=',
+            foreign_hits,
+            'weak=',
+            weak_hits,
+            '|',
+            b.title[:120],
+        )
 
 MedicalBrief.objects.filter(id__in=bad).update(status='rejected')
 print('Rejected weak briefs:', len(bad))

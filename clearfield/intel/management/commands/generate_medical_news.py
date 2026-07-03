@@ -5,7 +5,7 @@ import re
 from typing import Any
 
 from django.conf import settings
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import close_old_connections, transaction
 from django.utils import timezone
 from django.utils.text import slugify
@@ -23,6 +23,30 @@ from intel.models import (
 )
 
 
+IMAGE_TOPICS = (
+    "laboratory_diagnostics",
+    "prevention_health",
+    "medical_technologies",
+    "medical_science",
+    "education_staff",
+    "affordable_medicine",
+    "healthy_lifestyle",
+    "healthcare_region",
+    "north_ossetia_news",
+    "emergency_care",
+    "pharma",
+    "cardiology",
+    "oncology",
+    "diabetes",
+    "immunity_infections",
+    "rehabilitation",
+    "maternal_child_health",
+    "general_medical_news",
+)
+
+DEFAULT_IMAGE_TOPIC = "general_medical_news"
+
+
 SYSTEM_PROMPT = """
 Ты медицинский редактор сайта лабораторной диагностики.
 
@@ -30,6 +54,14 @@ SYSTEM_PROMPT = """
 
 Главный принцип:
 Пиши только на основании входных данных. Не расширяй медицинскую тему за счёт догадок.
+
+География и локальный контекст:
+- Регион аудитории сайта не является местом исходного события.
+- Место события определяй только по подтверждённым фактам.
+- Не переноси событие во Владикавказ или Северную Осетию ради SEO.
+- Не добавляй Владикавказ, Северную Осетию, РСО-Аланию или Аланию в заголовок, slug, meta description или фактическую часть, если этой географии нет в подтверждённых фактах.
+- Локальный фирменный блок лаборатории добавляется системой отдельно после проверки текста.
+- Не утверждай, что ФАП, поликлиника, больница или другой объект проводит лабораторные исследования, если это прямо не указано в фактах.
 
 Жёсткие правила:
 - Не ставь диагнозы.
@@ -72,11 +104,40 @@ SYSTEM_PROMPT = """
 - Без канцелярского перегруза.
 - Без медицинского давления на пациента.
 
+Выбор визуальной темы:
+- Верни поле image_topic.
+- Выбирай тему по основному событию и подтверждённым фактам.
+- Не выбирай laboratory_diagnostics только из-за обязательного блока о лабораторной диагностике.
+- Упоминание Владикавказа или Северной Осетии само по себе не означает north_ossetia_news.
+- Выбирай наиболее конкретную подходящую тему.
+- Если точной темы нет, используй general_medical_news.
+
+Допустимые значения image_topic:
+- laboratory_diagnostics
+- prevention_health
+- medical_technologies
+- medical_science
+- education_staff
+- affordable_medicine
+- healthy_lifestyle
+- healthcare_region
+- north_ossetia_news
+- emergency_care
+- pharma
+- cardiology
+- oncology
+- diabetes
+- immunity_infections
+- rehabilitation
+- maternal_child_health
+- general_medical_news
+
 Формат ответа:
 Верни строго JSON без Markdown-обёртки.
 
 Схема JSON:
 {
+  "image_topic": "одно допустимое значение из списка",
   "title": "заголовок новости",
   "slug": "latin-slug",
   "meta_description": "SEO description до 300 символов",
@@ -120,28 +181,38 @@ FORBIDDEN_IF_NOT_IN_SOURCE = (
 def normalize_text(value: str) -> str:
     value = (value or "").lower()
     value = value.replace("ё", "е")
+
+    # Приводим Unicode-дефисы и тире к обычному дефису.
+    # Например: РСО–Алания -> рсо-алания.
+    value = re.sub(r"[‐-‒–—−]", "-", value)
+    value = re.sub(r"\s*-\s*", "-", value)
+
     value = re.sub(r"\s+", " ", value)
     return value.strip()
 
 
-def source_contains(brief: MedicalBrief, phrase: str) -> bool:
-    source_text = normalize_text(
+def confirmed_source_text(brief: MedicalBrief) -> str:
+    """
+    Только подтверждённая фактологическая часть.
+
+    region_text, angle и SEO-ключи не являются доказательством
+    места исходного события.
+    """
+
+    return normalize_text(
         " ".join(
             [
                 brief.title or "",
-                brief.angle or "",
-                brief.target_keyword or "",
-                brief.secondary_keywords or "",
                 brief.facts or "",
-                brief.source_urls or "",
-                brief.safety_notes or "",
                 brief.event.title if brief.event else "",
                 brief.event.summary if brief.event else "",
             ]
         )
     )
 
-    return normalize_text(phrase) in source_text
+
+def source_contains(brief: MedicalBrief, phrase: str) -> bool:
+    return normalize_text(phrase) in confirmed_source_text(brief)
 
 
 def validate_medical_safety(brief: MedicalBrief, title: str, body: str) -> list[str]:
@@ -162,6 +233,54 @@ def validate_medical_safety(brief: MedicalBrief, title: str, body: str) -> list[
             errors.append(
                 f"Модель использовала неподтверждённую медицинскую конкретику: {phrase}"
             )
+
+    source_text = confirmed_source_text(brief)
+
+    locality_groups = {
+        "Владикавказ": (
+            "владикавказ",
+        ),
+        "Северная Осетия": (
+            "северная осетия",
+            "северной осетии",
+            "северную осетию",
+            "рсо-алания",
+            "рсо алания",
+            "республика северная осетия",
+        ),
+    }
+
+    for locality_name, markers in locality_groups.items():
+        generated_has_locality = any(
+            marker in generated_text
+            for marker in markers
+        )
+
+        source_has_locality = any(
+            marker in source_text
+            for marker in markers
+        )
+
+        if generated_has_locality and not source_has_locality:
+            errors.append(
+                "Модель добавила неподтверждённую географию "
+                f"события: {locality_name}"
+            )
+
+    raw_generated_text = f"{title}\n{body}"
+
+    placeholder_patterns = [
+        r"\[\s*(?:указать|вставить)[^\]]*\]",
+        r"\{\{[^}]+\}\}",
+    ]
+
+    if any(
+        re.search(pattern, raw_generated_text, flags=re.I)
+        for pattern in placeholder_patterns
+    ):
+        errors.append(
+            "Модель оставила редакционный шаблон или placeholder"
+        )
 
     return errors
 
@@ -185,11 +304,15 @@ def build_user_prompt(brief: MedicalBrief) -> str:
 Целевая аудитория:
 {brief.audience}
 
-Регион:
+Регион аудитории сайта — это не место события:
 {brief.region_text}
 
-Главная SEO-фраза:
+SEO-ориентир сайта — не обязан входить в текст новости:
 {brief.target_keyword}
+
+Если SEO-ориентир содержит Владикавказ или Северную Осетию,
+но этой географии нет в подтверждённых фактах, не используй её
+в заголовке, slug, meta description и описании события.
 
 Дополнительные ключевые фразы:
 {brief.secondary_keywords or "нет"}
@@ -224,6 +347,11 @@ def build_user_prompt(brief: MedicalBrief) -> str:
 - Если нужно упомянуть подготовку, пиши только общую безопасную фразу: "Подготовка зависит от конкретного исследования, поэтому условия лучше уточнять заранее".
 - Если входное событие общее, например диспансеризация, профилактика, оборудование, организация помощи, не превращай его в статью про конкретный анализ.
 - Если конкретный анализ не указан во входных данных, используй общие слова: "лабораторные исследования", "анализы", "профилактическое обследование", "лабораторная диагностика".
+- Не указывай, что конкретный ФАП, больница или поликлиника проводит анализы, если это прямо не сказано в подтверждённых фактах.
+- Не приписывай событию связь с Владикавказом или Северной Осетией, если её нет в подтверждённых фактах.
+- Не добавляй локальный CTA или рекламный блок: система добавит его отдельно после редакционной проверки.
+- Не оставляй placeholders вида "[указать дату]", "[вставить ссылку]" или "{{ значение }}".
+- Поле image_topic выбирай по основной теме исходного события, а не по обязательному блоку о лабораторной диагностике.
 """.strip()
 
 
@@ -244,6 +372,41 @@ def normalize_quality_score(value: Any) -> int:
         return 100
 
     return score
+
+
+def normalize_image_topic(value: Any) -> str:
+    topic = str(value or "").strip().lower()
+    topic = topic.replace("-", "_").replace(" ", "_")
+
+    aliases = {
+        "lab": "laboratory_diagnostics",
+        "laboratory": "laboratory_diagnostics",
+        "laboratory_diagnostic": "laboratory_diagnostics",
+        "prevention": "prevention_health",
+        "technology": "medical_technologies",
+        "technologies": "medical_technologies",
+        "science": "medical_science",
+        "education": "education_staff",
+        "staff": "education_staff",
+        "accessibility": "affordable_medicine",
+        "lifestyle": "healthy_lifestyle",
+        "regional_healthcare": "healthcare_region",
+        "north_ossetia": "north_ossetia_news",
+        "emergency": "emergency_care",
+        "pharmaceuticals": "pharma",
+        "immunity": "immunity_infections",
+        "infections": "immunity_infections",
+        "maternal_health": "maternal_child_health",
+        "child_health": "maternal_child_health",
+        "general": "general_medical_news",
+    }
+
+    topic = aliases.get(topic, topic)
+
+    if topic not in IMAGE_TOPICS:
+        return DEFAULT_IMAGE_TOPIC
+
+    return topic
 
 
 def make_slug(value: str, fallback_id: int) -> str:
@@ -275,6 +438,7 @@ def extract_news_payload(llm_text: str, brief_id: int) -> dict[str, Any]:
         meta_description = meta_description[:317].rstrip() + "..."
 
     return {
+        "image_topic": normalize_image_topic(data.get("image_topic")),
         "title": title[:300],
         "slug": slug,
         "meta_description": meta_description,
@@ -337,6 +501,14 @@ class Command(BaseCommand):
             help="Из какого статуса брать MedicalBrief.",
         )
         parser.add_argument(
+            "--brief-ids",
+            default="",
+            help=(
+                "Список ID MedicalBrief через запятую. "
+                "Позволяет выполнить точечную генерацию."
+            ),
+        )
+        parser.add_argument(
             "--model",
             default="",
             help="Переопределить модель Ollama для этого запуска.",
@@ -360,10 +532,29 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         limit = options["limit"]
         status = options["status"]
+        brief_ids_raw = options["brief_ids"]
         model = options["model"] or getattr(settings, "OLLAMA_MODEL", "")
         force = options["force"]
         skip_safety_check = options["skip_safety_check"]
         dry_run = options["dry_run"]
+
+        requested_brief_ids: list[int] = []
+
+        if brief_ids_raw:
+            for token in re.split(r"[\s,]+", brief_ids_raw.strip()):
+                if not token:
+                    continue
+
+                try:
+                    requested_brief_ids.append(int(token))
+                except ValueError as exc:
+                    raise CommandError(
+                        f"Некорректный MedicalBrief ID: {token}"
+                    ) from exc
+
+            requested_brief_ids = list(
+                dict.fromkeys(requested_brief_ids)
+            )
 
         if not getattr(settings, "LLM_ENABLED", False) and not dry_run:
             self.stdout.write(self.style.ERROR("LLM_DISABLED: установи LLM_ENABLED=True в .env"))
@@ -378,10 +569,21 @@ class Command(BaseCommand):
             .order_by("created_at")
         )
 
-        if not force:
-            queryset = queryset.filter(generated_news__isnull=True)
+        if requested_brief_ids:
+            queryset = queryset.filter(
+                id__in=requested_brief_ids,
+            )
 
-        brief_ids = list(queryset.distinct().values_list("id", flat=True)[:limit])
+        if not force:
+            queryset = queryset.filter(
+                generated_news__isnull=True,
+            )
+
+        brief_ids = list(
+            queryset
+            .distinct()
+            .values_list("id", flat=True)[:limit]
+        )
 
         if not brief_ids:
             self.stdout.write(self.style.WARNING("Нет MedicalBrief для генерации."))
@@ -448,6 +650,7 @@ class Command(BaseCommand):
                 with transaction.atomic():
                     news = GeneratedMedicalNews.objects.create(
                         brief_id=brief.pk,
+                        image_topic=payload["image_topic"],
                         title=payload["title"],
                         slug=payload["slug"],
                         meta_description=payload["meta_description"],

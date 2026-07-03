@@ -59,7 +59,12 @@ class Command(BaseCommand):
 
         # Newest first. Take extra rows so duplicate titles do not reduce the final feed too much.
         qs_limit = max(limit * 5, limit)
-        qs = GeneratedMedicalNews.objects.filter(status=status).order_by("-id")[:qs_limit]
+        qs = (
+            GeneratedMedicalNews.objects
+            .filter(status=status)
+            .select_related("brief")
+            .order_by("-id")[:qs_limit]
+        )
 
         items = []
         seen_titles = set()
@@ -82,8 +87,13 @@ class Command(BaseCommand):
                 "source_id": item.id,
                 "title": title,
                 "content": content,
-                "target_keyword": first_obj_value(item, ["target_keyword"]),
-                "theme": first_obj_value(item, ["theme", "angle"]),
+                "target_keyword": str(
+                    getattr(getattr(item, "brief", None), "target_keyword", "") or ""
+                ),
+                "theme": str(
+                    getattr(getattr(item, "brief", None), "angle", "") or ""
+                ),
+                "image_topic": first_obj_value(item, ["image_topic"]),
                 "created_at": item.created_at.isoformat() if getattr(item, "created_at", None) else timezone.now().isoformat(),
             })
 

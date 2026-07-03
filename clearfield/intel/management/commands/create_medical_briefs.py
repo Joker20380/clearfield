@@ -599,14 +599,30 @@ class Command(BaseCommand):
             score, reasons = candidate_score(event)
             summary_len = len((event.summary or "").strip())
 
+            has_medical_signal = any(
+                reason.startswith(("medical:", "lab:", "strong:"))
+                for reason in reasons
+            )
+
+            if not has_medical_signal:
+                reasons = [*reasons, "no-medical-signal"]
+
+            bad_title = is_bad_title(event.title or "")
+
             is_good = (
                 score >= min_score
                 and summary_len >= min_summary_len
-                and not is_bad_title(event.title or "")
+                and not bad_title
+                and has_medical_signal
             )
 
             if allow_weak:
-                is_good = score >= 0 and summary_len >= 80
+                is_good = (
+                    score >= 0
+                    and summary_len >= 80
+                    and not bad_title
+                    and has_medical_signal
+                )
 
             if is_good:
                 selected.append((event, score, reasons))

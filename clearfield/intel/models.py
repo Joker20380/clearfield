@@ -324,6 +324,16 @@ class GeneratedMedicalNews(models.Model):
         blank=True,
         help_text="Краткое примечание об источниках и основании материала.",
     )
+    image_topic = models.CharField(
+        max_length=64,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "Закрытый ключ визуальной темы, выбранный LLM "
+            "для сопоставления с изображением."
+        ),
+    )
+
     disclaimer = models.TextField(
         default=(
             "Материал носит информационный характер и не заменяет консультацию врача. "
