@@ -63,6 +63,17 @@ STRONG_PATIENT_TOPICS = [
 ]
 
 
+EDITORIAL_MEDICAL_TOPICS = [
+    "врач", "хирург", "кардиолог", "нейрохирург",
+    "студент", "университет", "медицинское образование",
+    "ординатур", "стажиров", "наставнич", "практик",
+    "оборудован", "аппарат", "медицинская техника",
+    "реанимац", "скорая помощь", "операц",
+    "реабилитац", "физиотерап", "клиническ",
+    "здравоохран", "больниц", "поликлиник",
+]
+
+
 def normalize_text(value: str) -> str:
     value = value or ""
     value = str(value).lower().replace("ё", "е")
@@ -244,18 +255,36 @@ class Command(BaseCommand):
             if table_like_score(combined) >= 3:
                 reasons.append("table-like")
 
-            has_medical = has_any_word(combined, MEDICAL_WORDS)
-            has_local = has_any_word(combined, LOCAL_WORDS)
-            has_lab_seo = has_any_word(combined, LAB_SEO_WORDS)
-            has_strong_patient_topic = has_any_word(combined, STRONG_PATIENT_TOPICS)
+            source_text = get_obj_text(
+                brief,
+                ["title", "facts"],
+            )
+
+            has_medical = has_any_word(source_text, MEDICAL_WORDS)
+            has_local = has_any_word(source_text, LOCAL_WORDS)
+            has_lab_seo = has_any_word(source_text, LAB_SEO_WORDS)
+            has_strong_patient_topic = has_any_word(
+                source_text,
+                STRONG_PATIENT_TOPICS,
+            )
+            has_editorial_medical_topic = has_any_word(
+                source_text,
+                EDITORIAL_MEDICAL_TOPICS,
+            )
 
             if not has_medical:
                 reasons.append("no-medical-context")
 
-            # Для Дзагурова материал должен быть либо локальным,
-            # либо иметь сильную пациентскую/лабораторную связку.
-            if has_medical and not has_local and not (has_lab_seo and has_strong_patient_topic):
-                reasons.append("weak-dzagurov-link")
+            if (
+                has_medical
+                and not has_local
+                and not (
+                    has_lab_seo
+                    or has_strong_patient_topic
+                    or has_editorial_medical_topic
+                )
+            ):
+                reasons.append("weak-medical-relevance")
 
             for old_title in generated_titles:
                 ratio = similarity(title, old_title)
