@@ -1,6 +1,7 @@
 import json
 import secrets
 from pathlib import Path
+from urllib.parse import urlparse
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
@@ -19,6 +20,55 @@ def first_obj_value(obj, fields):
             if value:
                 return str(value)
     return ""
+
+
+def get_source_urls(brief):
+    raw_value = getattr(brief, "source_urls", "") or ""
+    urls = []
+
+    for raw_line in str(raw_value).splitlines():
+        url = raw_line.strip()
+
+        if not url:
+            continue
+
+        parsed = urlparse(url)
+
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+        ):
+            continue
+
+        if url not in urls:
+            urls.append(url)
+
+    return urls
+
+
+def append_source_links(content, urls):
+    missing_urls = [
+        url
+        for url in urls
+        if url not in content
+    ]
+
+    if not missing_urls:
+        return content
+
+    if len(missing_urls) == 1:
+        source_block = f"[Источник]({missing_urls[0]})"
+    else:
+        source_lines = ["## Источники", ""]
+
+        for index, url in enumerate(missing_urls, start=1):
+            source_lines.append(
+                f"- [Источник {index}]({url})"
+            )
+
+        source_block = "\n".join(source_lines)
+
+    return f"{content.rstrip()}\n\n{source_block}\n"
 
 
 def get_or_create_token(base_dir):
@@ -72,6 +122,12 @@ class Command(BaseCommand):
         for item in qs:
             title = first_obj_value(item, TITLE_FIELDS)
             content = first_obj_value(item, CONTENT_FIELDS)
+            brief = getattr(item, "brief", None)
+
+            content = append_source_links(
+                content,
+                get_source_urls(brief),
+            )
 
             if not title or not content:
                 self.stdout.write(self.style.WARNING(f"SKIP #{item.id}: empty title/content"))
@@ -88,10 +144,10 @@ class Command(BaseCommand):
                 "title": title,
                 "content": content,
                 "target_keyword": str(
-                    getattr(getattr(item, "brief", None), "target_keyword", "") or ""
+                    getattr(brief, "target_keyword", "") or ""
                 ),
                 "theme": str(
-                    getattr(getattr(item, "brief", None), "angle", "") or ""
+                    getattr(brief, "angle", "") or ""
                 ),
                 "image_topic": first_obj_value(item, ["image_topic"]),
                 "created_at": item.created_at.isoformat() if getattr(item, "created_at", None) else timezone.now().isoformat(),

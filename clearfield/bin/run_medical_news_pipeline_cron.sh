@@ -1,40 +1,64 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
-set -u
+set -uo pipefail
 
 export HOME="/home/j/joker2038"
-export PATH="/usr/local/bin:/usr/bin:/bin"
+export PATH="/home/j/joker2038/clearfield/public_html/venv/bin:/usr/local/bin:/usr/bin:/bin"
 
-BASE="/home/j/joker2038/clearfield/public_html/clearfield"
-LOG="$BASE/logs/medical_news_pipeline.cron.log"
+PROJECT_DIR="/home/j/joker2038/clearfield/public_html/clearfield"
+LOG_DIR="$PROJECT_DIR/logs"
+LOG_FILE="$LOG_DIR/medical-news-cron-$(date +%F).log"
 
-mkdir -p "$BASE/logs"
+mkdir -p "$LOG_DIR"
 
-{
-    echo
-    echo "============================================================"
-    echo "$(date '+%F %T %Z') TIMEWEB SH WRAPPER START"
-    echo "USER=$(whoami)"
-    echo "HOME=$HOME"
-    echo "BASE=$BASE"
-    echo "PWD before cd=$(pwd)"
+exec >>"$LOG_FILE" 2>&1
 
-    if ! cd "$BASE"; then
-        echo "$(date '+%F %T %Z') ERROR: cannot cd to $BASE"
-        exit 1
-    fi
+echo
+echo "================================================================"
+echo "[$(date --iso-8601=seconds)] MEDICAL NEWS CRON START"
+echo "================================================================"
 
-    echo "PWD after cd=$(pwd)"
-    echo "Running medical news pipeline..."
+if ! cd "$PROJECT_DIR"; then
+    echo "ERROR: cannot enter project directory"
+    exit 1
+fi
 
-    status=0
+echo
+echo "=== 1. GENERATE AND EXPORT MEDICAL NEWS ==="
 
-    /bin/bash "$BASE/bin/medical_news_pipeline.sh" \
-        || status=$?
+set +e
+bash ./bin/medical_news_pipeline.sh
+PIPELINE_STATUS=$?
+set -e
 
-    echo "PIPELINE EXIT STATUS=$status"
-    echo "$(date '+%F %T %Z') TIMEWEB SH WRAPPER END"
-    echo "============================================================"
+echo
+echo "Pipeline status: $PIPELINE_STATUS"
 
-    exit "$status"
-} >>"$LOG" 2>&1
+if [ "$PIPELINE_STATUS" -ne 0 ]; then
+    echo "ERROR: medical news pipeline failed"
+    echo "Dzagurov synchronization was not started."
+    exit "$PIPELINE_STATUS"
+fi
+
+echo
+echo "=== 2. SYNCHRONIZE NEWS TO DZAGUROV ==="
+
+set +e
+bash ./bin/sync_medical_news_to_dzagurov.sh
+SYNC_STATUS=$?
+set -e
+
+echo
+echo "Synchronization status: $SYNC_STATUS"
+
+if [ "$SYNC_STATUS" -ne 0 ]; then
+    echo "ERROR: Dzagurov synchronization failed"
+    exit "$SYNC_STATUS"
+fi
+
+echo
+echo "================================================================"
+echo "[$(date --iso-8601=seconds)] MEDICAL NEWS CRON COMPLETED"
+echo "================================================================"
+
+exit 0

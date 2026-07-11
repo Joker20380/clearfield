@@ -13,6 +13,7 @@ from intel.models import (
     Event,
     MedicalBrief,
     MedicalBriefStatus,
+    RawItem,
     Topic,
 )
 
@@ -836,12 +837,56 @@ def build_angle(title: str, summary: str) -> str:
 def collect_event_facts(event: Event) -> tuple[str, str]:
     facts: list[str] = []
     urls: list[str] = []
+    seen_item_ids: set[int] = set()
 
     if event.title:
         facts.append(f"Событие: {compact(event.title, 500)}")
 
     if event.summary:
         facts.append(f"Краткое содержание: {compact(event.summary, 1600)}")
+
+    def add_raw_item(item: RawItem | None) -> None:
+        if not item or item.pk in seen_item_ids:
+            return
+
+        seen_item_ids.add(item.pk)
+
+        url = (item.url or "").strip()
+
+        if (
+            url.startswith(("http://", "https://"))
+            and url not in urls
+        ):
+            urls.append(url)
+
+        source_name = (
+            item.source.name
+            if item.source
+            else "источник"
+        )
+
+        if item.title:
+            facts.append(
+                f"Материал ({source_name}): "
+                f"{compact(item.title, 500)}"
+            )
+
+        if item.summary:
+            facts.append(
+                f"Описание ({source_name}): "
+                f"{compact(item.summary, 900)}"
+            )
+
+        try:
+            article = item.article
+        except Article.DoesNotExist:
+            article = None
+
+        if article and article.text:
+            facts.append(
+                f"Фрагмент статьи ({source_name}): "
+                f"{compact(article.text, 1800)}"
+            )
 
     event_items = (
         event.items
@@ -850,29 +895,37 @@ def collect_event_facts(event: Event) -> tuple[str, str]:
     )
 
     for event_item in event_items:
-        item = event_item.item
+        add_raw_item(event_item.item)
 
-        if not item:
-            continue
+    # Старые Event могут потерять EventItem-связи.
+    # Сначала пробуем восстановить RawItem по cluster_key.
+    if not urls:
+        raw_items = (
+            RawItem.objects
+            .select_related("source")
+            .order_by("-published_at", "-created_at", "-id")
+        )
 
-        if item.url and item.url not in urls:
-            urls.append(item.url)
+        cluster_key = (event.cluster_key or "").strip()
 
-        source_name = item.source.name if item.source else "источник"
+        if cluster_key.startswith("ih:"):
+            item_hash = cluster_key.removeprefix("ih:").strip()
 
-        if item.title:
-            facts.append(f"Материал ({source_name}): {compact(item.title, 500)}")
+            if item_hash:
+                for item in raw_items.filter(
+                    item_hash=item_hash
+                )[:8]:
+                    add_raw_item(item)
 
-        if item.summary:
-            facts.append(f"Описание ({source_name}): {compact(item.summary, 900)}")
+        # Некоторые старые дубликаты Event имеют другой cluster_key.
+        # В таком случае точный заголовок является безопасным fallback.
+        if not urls and event.title:
+            normalized_title = " ".join(event.title.split())
 
-        try:
-            article = item.article
-        except Article.DoesNotExist:
-            article = None
-
-        if article and article.text:
-            facts.append(f"Фрагмент статьи ({source_name}): {compact(article.text, 1800)}")
+            for item in raw_items.filter(
+                title__iexact=normalized_title
+            )[:8]:
+                add_raw_item(item)
 
     facts_text = "\n\n".join(facts).strip()
     urls_text = "\n".join(urls).strip()
