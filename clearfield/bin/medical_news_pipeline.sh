@@ -22,7 +22,7 @@ echo "$(date '+%F %T') Medical news pipeline started"
 echo "============================================================"
 
 echo "[1/10] Ensure Ollama tunnel"
-./bin/ensure_ollama_tunnel.sh
+./bin/ensure_llm_tunnel.sh
 
 echo "[2/10] Ingest feeds"
 python3 manage.py ingest_feeds \

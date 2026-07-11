@@ -35,7 +35,7 @@ fi
   python -c "import django; print('Django', django.get_version())"
 
   echo "[1/8] Ensure Ollama tunnel"
-  ./bin/ensure_ollama_tunnel.sh
+  ./bin/ensure_llm_tunnel.sh
 
   echo "[2/8] Ingest feeds"
   python manage.py ingest_feeds
