@@ -11,6 +11,9 @@ from .models import (
     GeneratedMedicalNews,
     MedicalBrief,
     MedicalBriefStatus,
+    RegionalDigest,
+    RegionalDigestItem,
+    RegionalDigestStatus,
     MedicalNewsStatus,
     RawItem,
     Source,
@@ -21,7 +24,7 @@ from .models import (
 # ADMIN SITE BRANDING
 # =============================================================================
 
-admin.site.site_header = "CLEARFIELD — медицинские новости"
+admin.site.site_header = "CLEARFIELD — новостной конвейер"
 admin.site.site_title = "CLEARFIELD"
 admin.site.index_title = "Панель управления новостным конвейером"
 
@@ -49,6 +52,8 @@ set_admin_names(Event, "Событие", "События")
 set_admin_names(EventItem, "Материал события", "Материалы событий")
 set_admin_names(MedicalBrief, "Медицинское задание", "Медицинские задания")
 set_admin_names(GeneratedMedicalNews, "Медицинская новость", "Медицинские новости")
+set_admin_names(RegionalDigest, "Региональная SEO-новость", "Региональные SEO-новости")
+set_admin_names(RegionalDigestItem, "Событие региональной SEO-новости", "События региональных SEO-новостей")
 
 
 # =============================================================================
@@ -680,7 +685,7 @@ class MedicalBriefAdmin(admin.ModelAdmin):
                 "angle",
             )
         }),
-        ("SEO", {
+        ("Поисковая оптимизация", {
             "fields": (
                 "target_keyword",
                 "secondary_keywords",
@@ -824,7 +829,7 @@ class GeneratedMedicalNewsAdmin(admin.ModelAdmin):
                 "brief_link",
             )
         }),
-        ("SEO", {
+        ("Поисковая оптимизация", {
             "fields": (
                 "title",
                 "slug",
@@ -838,7 +843,7 @@ class GeneratedMedicalNewsAdmin(admin.ModelAdmin):
                 "disclaimer",
             )
         }),
-        ("LLM", {
+        ("Генерация искусственным интеллектом", {
             "fields": (
                 "llm_model",
                 "llm_elapsed_ms",
@@ -909,3 +914,419 @@ class GeneratedMedicalNewsAdmin(admin.ModelAdmin):
     def mark_error(self, request, queryset):
         updated = queryset.update(status=MedicalNewsStatus.ERROR)
         self.message_user(request, f"Отмечено как ошибка: {updated}", messages.ERROR)
+
+
+class RegionalDigestItemInline(admin.TabularInline):
+    model = RegionalDigestItem
+    extra = 0
+    can_delete = False
+    fields = (
+        "event",
+        "created_at",
+    )
+    readonly_fields = (
+        "event",
+        "created_at",
+    )
+    show_change_link = True
+
+
+@admin.register(RegionalDigest)
+class RegionalDigestAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "status",
+        "region_label",
+        "topic",
+        "short_title",
+        "events_count",
+        "body_chars",
+        "has_source_links",
+        "published_at",
+        "created_at",
+    )
+    list_filter = (
+        "status",
+        "topic",
+        "region_label",
+        "created_at",
+        "published_at",
+    )
+    search_fields = (
+        "title",
+        "body",
+        "region_label",
+        "topic",
+        "llm_error",
+    )
+    readonly_fields = (
+        "created_at",
+        "updated_at",
+        "published_at",
+        "events_count",
+        "body_chars",
+        "has_source_links",
+        "source_map_preview",
+    )
+    fieldsets = (
+        (
+            "Основное",
+            {
+                "fields": (
+                    "status",
+                    "title",
+                    "topic",
+                    "region_label",
+                    "published_at",
+                    "created_at",
+                    "updated_at",
+                )
+            },
+        ),
+        (
+            "Текст",
+            {
+                "fields": (
+                    "body",
+                    "body_chars",
+                    "has_source_links",
+                )
+            },
+        ),
+        (
+            "Диагностика",
+            {
+                "classes": ("collapse",),
+                "fields": (
+                    "llm_error",
+                    "source_map_preview",
+                ),
+            },
+        ),
+    )
+    inlines = (
+        RegionalDigestItemInline,
+    )
+    ordering = (
+        "-created_at",
+        "-id",
+    )
+    actions = (
+        "mark_as_review",
+        "mark_as_rejected",
+    )
+
+    def short_title(self, obj):
+        return (obj.title or f"Региональная SEO-новость №{obj.pk}")[:90]
+
+    short_title.short_description = "Заголовок"
+
+    def events_count(self, obj):
+        return obj.digest_items.count()
+
+    events_count.short_description = "Событий"
+
+    def body_chars(self, obj):
+        return len(obj.body or "")
+
+    body_chars.short_description = "Символов"
+
+    def has_source_links(self, obj):
+        return "regional-source-link" in (obj.body or "")
+
+    has_source_links.boolean = True
+    has_source_links.short_description = "Ссылки"
+
+    def source_map_preview(self, obj):
+        value = obj.source_map or {}
+
+        if not value:
+            return ""
+
+        import json
+
+        return json.dumps(
+            value,
+            ensure_ascii=False,
+            indent=2,
+            default=str,
+        )[:12000]
+
+    source_map_preview.short_description = "Карта источников"
+
+    @admin.action(description="Перевести выбранные на проверку")
+    def mark_as_review(self, request, queryset):
+        updated = queryset.update(
+            status=RegionalDigestStatus.REVIEW,
+        )
+
+        self.message_user(
+            request,
+            f"Обновлено региональных SEO-новостей: {updated}",
+        )
+
+    @admin.action(description="Отклонить выбранные")
+    def mark_as_rejected(self, request, queryset):
+        updated = queryset.update(
+            status=RegionalDigestStatus.REJECTED,
+        )
+
+        self.message_user(
+            request,
+            f"Отклонено региональных SEO-новостей: {updated}",
+        )
+
+
+@admin.register(RegionalDigestItem)
+class RegionalDigestItemAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "digest",
+        "event",
+        "created_at",
+    )
+    list_filter = (
+        "created_at",
+    )
+    search_fields = (
+        "digest__title",
+        "event__title",
+    )
+    readonly_fields = (
+        "digest",
+        "event",
+        "created_at",
+    )
+    ordering = (
+        "-created_at",
+        "-id",
+    )
+
+
+
+# =============================================================================
+# AUTOMOTIVE CONTENT PRODUCTION ADMIN
+# =============================================================================
+
+from django.utils import timezone as automotive_timezone
+
+from .models import (
+    AutomotiveBrief,
+    AutomotiveBriefStatus,
+    AutomotiveNewsStatus,
+    GeneratedAutomotiveNews,
+)
+
+
+@admin.register(AutomotiveBrief)
+class AutomotiveBriefAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "status",
+        "title",
+        "target_keyword",
+        "event",
+        "created_at",
+        "used_at",
+    )
+
+    list_filter = (
+        "status",
+        "disclaimer_required",
+        "created_at",
+        "updated_at",
+    )
+
+    search_fields = (
+        "title",
+        "angle",
+        "target_keyword",
+        "secondary_keywords",
+        "facts",
+        "source_urls",
+        "event__title",
+        "event__summary",
+    )
+
+    readonly_fields = (
+        "created_at",
+        "updated_at",
+        "used_at",
+    )
+
+    raw_id_fields = (
+        "event",
+    )
+
+    actions = (
+        "mark_ready",
+        "mark_used",
+        "mark_rejected",
+        "reset_to_draft",
+    )
+
+    @admin.action(
+        description="Отметить задания как готовые"
+    )
+    def mark_ready(self, request, queryset):
+        updated = queryset.update(
+            status=AutomotiveBriefStatus.READY,
+        )
+
+        self.message_user(
+            request,
+            f"Отмечено как готовые: {updated}",
+        )
+
+    @admin.action(
+        description="Отметить задания как использованные"
+    )
+    def mark_used(self, request, queryset):
+        updated = queryset.update(
+            status=AutomotiveBriefStatus.USED,
+            used_at=automotive_timezone.now(),
+        )
+
+        self.message_user(
+            request,
+            f"Отмечено как использованные: {updated}",
+        )
+
+    @admin.action(
+        description="Отклонить задания"
+    )
+    def mark_rejected(self, request, queryset):
+        updated = queryset.update(
+            status=AutomotiveBriefStatus.REJECTED,
+        )
+
+        self.message_user(
+            request,
+            f"Отклонено заданий: {updated}",
+        )
+
+    @admin.action(
+        description="Вернуть задания в черновики"
+    )
+    def reset_to_draft(self, request, queryset):
+        updated = queryset.update(
+            status=AutomotiveBriefStatus.DRAFT,
+            used_at=None,
+        )
+
+        self.message_user(
+            request,
+            f"Возвращено в черновики: {updated}",
+        )
+
+
+@admin.register(GeneratedAutomotiveNews)
+class GeneratedAutomotiveNewsAdmin(
+    admin.ModelAdmin
+):
+    list_display = (
+        "id",
+        "status",
+        "title",
+        "quality_score",
+        "brief",
+        "image_topic",
+        "llm_model",
+        "llm_elapsed_ms",
+        "created_at",
+        "published_at",
+    )
+
+    list_filter = (
+        "status",
+        "image_topic",
+        "llm_model",
+        "created_at",
+        "published_at",
+    )
+
+    search_fields = (
+        "title",
+        "slug",
+        "meta_description",
+        "body",
+        "source_note",
+        "llm_error",
+        "brief__title",
+    )
+
+    readonly_fields = (
+        "created_at",
+        "updated_at",
+        "published_at",
+        "llm_model",
+        "llm_prompt",
+        "llm_response_raw",
+        "llm_elapsed_ms",
+        "llm_error",
+    )
+
+    raw_id_fields = (
+        "brief",
+    )
+
+    actions = (
+        "mark_approved",
+        "mark_published",
+        "mark_rejected",
+        "reset_to_review",
+    )
+
+    @admin.action(
+        description="Одобрить новости"
+    )
+    def mark_approved(self, request, queryset):
+        updated = queryset.update(
+            status=AutomotiveNewsStatus.APPROVED,
+        )
+
+        self.message_user(
+            request,
+            f"Одобрено новостей: {updated}",
+        )
+
+    @admin.action(
+        description="Отметить новости как опубликованные"
+    )
+    def mark_published(self, request, queryset):
+        updated = queryset.update(
+            status=AutomotiveNewsStatus.PUBLISHED,
+            published_at=automotive_timezone.now(),
+        )
+
+        self.message_user(
+            request,
+            f"Опубликовано новостей: {updated}",
+        )
+
+    @admin.action(
+        description="Отклонить новости"
+    )
+    def mark_rejected(self, request, queryset):
+        updated = queryset.update(
+            status=AutomotiveNewsStatus.REJECTED,
+        )
+
+        self.message_user(
+            request,
+            f"Отклонено новостей: {updated}",
+        )
+
+    @admin.action(
+        description="Вернуть новости на проверку"
+    )
+    def reset_to_review(self, request, queryset):
+        updated = queryset.update(
+            status=AutomotiveNewsStatus.REVIEW,
+            published_at=None,
+        )
+
+        self.message_user(
+            request,
+            f"Возвращено на проверку: {updated}",
+        )

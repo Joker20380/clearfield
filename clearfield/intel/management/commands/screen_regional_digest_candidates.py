@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import re
 from datetime import timedelta
 from typing import Any
 
@@ -199,24 +200,119 @@ def parse_bool(
     )
 
 
-def parse_score(
-    value: object,
-    field_name: str,
-) -> float:
-    try:
-        score = float(value)
-    except (TypeError, ValueError) as exc:
-        raise CommandError(
-            f"{field_name} must be numeric"
-        ) from exc
+def parse_score(value: Any, field_name: str) -> float:
+    """
+    Parse score values from CLI args and LLM JSON.
 
-    if not 0.0 <= score <= 1.0:
-        raise CommandError(
-            f"{field_name} must be between 0 and 1"
-        )
+    CLI thresholds remain strict. LLM screening scores are
+    allowed to be noisy: if one score is malformed, we treat
+    it as 0.0 so that the candidate fails thresholds instead
+    of crashing the whole daily pipeline.
+    """
 
-    return score
+    is_llm_field = str(field_name).startswith("E")
 
+    def normalize_number(number: float) -> float | None:
+        if number > 1.0 and number <= 100.0:
+            number = number / 100.0
+
+        if 0.0 <= number <= 1.0:
+            return number
+
+        return None
+
+    def extract(raw_value):
+        if isinstance(raw_value, bool):
+            return None
+
+        if isinstance(raw_value, (int, float)):
+            return normalize_number(float(raw_value))
+
+        if isinstance(raw_value, str):
+            raw = (
+                raw_value
+                .strip()
+                .replace(",", ".")
+                .replace("−", "-")
+            )
+
+            if not raw:
+                return None
+
+            percent = "%" in raw
+
+            match = re.search(
+                r"[-+]?\d+(?:\.\d+)?",
+                raw,
+            )
+
+            if not match:
+                return None
+
+            try:
+                number = float(match.group(0))
+            except ValueError:
+                return None
+
+            if percent:
+                number = number / 100.0
+
+            return normalize_number(number)
+
+        if isinstance(raw_value, dict):
+            preferred_keys = (
+                "score",
+                "value",
+                "rating",
+                "number",
+                "numeric",
+                "medical_focus",
+                "regional_relevance",
+                "source_sufficiency",
+                "priority",
+                "semantic_score",
+                "confidence",
+            )
+
+            for key in preferred_keys:
+                if key not in raw_value:
+                    continue
+
+                parsed = extract(raw_value[key])
+
+                if parsed is not None:
+                    return parsed
+
+            for nested in raw_value.values():
+                parsed = extract(nested)
+
+                if parsed is not None:
+                    return parsed
+
+            return None
+
+        if isinstance(raw_value, (list, tuple)):
+            for nested in raw_value:
+                parsed = extract(nested)
+
+                if parsed is not None:
+                    return parsed
+
+            return None
+
+        return None
+
+    parsed = extract(value)
+
+    if parsed is not None:
+        return parsed
+
+    if is_llm_field:
+        return 0.0
+
+    raise CommandError(
+        f"{field_name} must be numeric"
+    )
 
 def event_identifier(event_id: int) -> str:
     return f"E{event_id}"
@@ -308,9 +404,23 @@ def collect_candidates(
     if topic:
         queryset = queryset.filter(topic=topic)
 
+    published_event_ids = set(
+        RegionalDigest.objects
+        .filter(
+            status=RegionalDigestStatus.PUBLISHED,
+        )
+        .values_list(
+            "digest_items__event_id",
+            flat=True,
+        )
+    )
+
     records = []
 
     for event in queryset:
+        if event.id in published_event_ids:
+            continue
+
         if not matches_region(
             event,
             region_code,
@@ -961,7 +1071,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--min-events",
             type=int,
-            default=3,
+            default=1,
         )
         parser.add_argument(
             "--max-events",

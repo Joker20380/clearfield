@@ -119,7 +119,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--min-events",
             type=int,
-            default=3,
+            default=1,
         )
         parser.add_argument(
             "--max-events",

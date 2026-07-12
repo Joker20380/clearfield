@@ -38,10 +38,10 @@ fi
   ./bin/ensure_llm_tunnel.sh
 
   echo "[2/8] Ingest feeds"
-  python manage.py ingest_feeds
+  python manage.py ingest_feeds --topic medicine
 
   echo "[3/8] Cluster events"
-  python manage.py cluster_events
+  python manage.py cluster_events --topic medicine
 
   echo "[4/8] Create medical briefs"
   python manage.py create_medical_briefs \

@@ -26,6 +26,7 @@ echo "[1/10] Ensure Ollama tunnel"
 
 echo "[2/10] Ingest feeds"
 python3 manage.py ingest_feeds \
+  --topic medicine \
   --limit 20 \
   --concurrency 3 \
   --max-items-per-source 30 \
@@ -33,6 +34,7 @@ python3 manage.py ingest_feeds \
 
 echo "[3/10] Cluster events"
 python3 manage.py cluster_events \
+  --topic medicine \
   --limit 2000
 
 echo "[3.5/10] Repair EventItem links"

@@ -16,7 +16,7 @@ from django.core.management.base import BaseCommand
 from django.db import close_old_connections
 from django.utils import timezone
 
-from intel.models import FetchLog, RawItem, Source
+from intel.models import FetchLog, RawItem, Source, Topic
 
 
 # =============================================================================
@@ -490,8 +490,18 @@ def get_sources(
     source_id: int | None = None,
     source_ids: list[int] | None = None,
     only_last: int | None = None,
+    topic: str | None = None,
 ):
-    qs = Source.objects.filter(is_enabled=True)
+    base_qs = Source.objects.filter(
+        is_enabled=True,
+    )
+
+    if topic:
+        base_qs = base_qs.filter(
+            topic=topic,
+        )
+
+    qs = base_qs
 
     if source_id is not None:
         qs = qs.filter(id=source_id)
@@ -501,14 +511,23 @@ def get_sources(
 
     if only_last:
         last_ids = list(
-            Source.objects.filter(is_enabled=True)
+            base_qs
             .order_by("-id")
-            .values_list("id", flat=True)[: int(only_last)]
+            .values_list(
+                "id",
+                flat=True,
+            )[: int(only_last)]
         )
-        qs = qs.filter(id__in=last_ids)
+
+        qs = qs.filter(
+            id__in=last_ids,
+        )
 
     # Самые давно не опрашиваемые — вперёд.
-    qs = qs.order_by("last_fetch_at", "id")
+    qs = qs.order_by(
+        "last_fetch_at",
+        "id",
+    )
 
     if limit:
         qs = qs[: int(limit)]
@@ -582,7 +601,25 @@ class Command(BaseCommand):
     help = "Fetch RSS/Atom feeds or HTML news pages and store RawItem."
 
     def add_arguments(self, parser):
-        parser.add_argument("--limit", type=int, default=50)
+        parser.add_argument(
+            "--limit",
+            type=int,
+            default=50,
+        )
+
+        parser.add_argument(
+            "--topic",
+            choices=[
+                value
+                for value, _label
+                in Topic.choices
+            ],
+            default=None,
+            help=(
+                "Ingest only enabled Sources "
+                "with this topic."
+            ),
+        )
 
         parser.add_argument(
             "--source-id",
@@ -634,6 +671,7 @@ class Command(BaseCommand):
         asyncio.run(
             self.run(
                 limit=options["limit"],
+                topic=options.get("topic"),
                 source_id=options.get("source_id"),
                 source_ids=parse_source_ids(options.get("source_ids")),
                 only_last=options.get("only_last"),
@@ -647,6 +685,7 @@ class Command(BaseCommand):
     async def run(
         self,
         limit: int,
+        topic: str | None,
         source_id: int | None,
         source_ids: list[int],
         only_last: int | None,
@@ -662,12 +701,15 @@ class Command(BaseCommand):
             source_id=source_id,
             source_ids=source_ids,
             only_last=only_last,
+            topic=topic,
         )
 
         self.stdout.write(
             f"[ingest_feeds] scope sources={len(sources)} "
-            f"(limit={limit} source_id={source_id} "
-            f"source_ids={len(source_ids)} only_last={only_last})"
+            f"(topic={topic} limit={limit} "
+            f"source_id={source_id} "
+            f"source_ids={len(source_ids)} "
+            f"only_last={only_last})"
         )
 
         if not sources:

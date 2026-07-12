@@ -10,7 +10,7 @@ from django.db import IntegrityError, OperationalError, close_old_connections, t
 from django.db.transaction import TransactionManagementError
 from django.utils import timezone
 
-from intel.models import Event, EventItem, RawItem, SourceClass
+from intel.models import Event, EventItem, RawItem, SourceClass, Topic
 
 
 def _sha1(s: str) -> str:
@@ -24,7 +24,10 @@ def build_cluster_key(raw: RawItem) -> str:
     Более глубокую склейку можно делать командой recluster_events.
     """
     if getattr(raw, "item_hash", None):
-        return f"ih:{raw.item_hash}"
+        # Event.cluster_key has max_length=64.
+        # Prefix plus the original SHA-256 hash would be
+        # 67 characters and is truncated by MySQL.
+        return f"ih:{_sha1(raw.item_hash)}"
 
     url = (raw.url or "").strip()
 
@@ -150,8 +153,31 @@ class Command(BaseCommand):
     help = "Cluster unlinked RawItem into Events and create EventItems."
 
     def add_arguments(self, parser):
-        parser.add_argument("--dry-run", action="store_true", help="No writes, only counts.")
-        parser.add_argument("--batch-size", type=int, default=500)
+        parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="No writes, only counts.",
+        )
+
+        parser.add_argument(
+            "--topic",
+            choices=[
+                value
+                for value, _label
+                in Topic.choices
+            ],
+            default=None,
+            help=(
+                "Cluster only unlinked RawItem "
+                "whose Source has this topic."
+            ),
+        )
+
+        parser.add_argument(
+            "--batch-size",
+            type=int,
+            default=500,
+        )
 
         parser.add_argument("--debug-insert", action="store_true", help="Try inserting a sample EventItem.")
         parser.add_argument("--debug-event-insert", action="store_true", help="Try inserting a sample Event.")
@@ -163,6 +189,7 @@ class Command(BaseCommand):
         dry_run = options["dry_run"]
         batch_size = options["batch_size"]
         limit = options.get("limit")
+        topic = options.get("topic")
 
         unlinked_qs = (
             RawItem.objects
@@ -170,6 +197,11 @@ class Command(BaseCommand):
             .select_related("source")
             .order_by("id")
         )
+
+        if topic:
+            unlinked_qs = unlinked_qs.filter(
+                source__topic=topic,
+            )
 
         if limit:
             unlinked_ids = list(unlinked_qs.values_list("id", flat=True)[:limit])
@@ -180,8 +212,17 @@ class Command(BaseCommand):
                 .order_by("id")
             )
 
-        scope_count = db_retry(unlinked_qs.count, label="count unlinked", stdout=self.stdout)
-        self.stdout.write(f"[cluster_events] unlinked scope = {scope_count}")
+        scope_count = db_retry(
+            unlinked_qs.count,
+            label="count unlinked",
+            stdout=self.stdout,
+        )
+
+        self.stdout.write(
+            f"[cluster_events] "
+            f"topic={topic} "
+            f"unlinked scope={scope_count}"
+        )
 
         if scope_count == 0:
             self.stdout.write("[cluster_events] nothing to do")
@@ -355,9 +396,22 @@ class Command(BaseCommand):
             raise
 
         def remaining_unlinked():
-            return RawItem.objects.filter(event_item__isnull=True).count()
+            queryset = RawItem.objects.filter(
+                event_item__isnull=True,
+            )
 
-        remaining = db_retry(remaining_unlinked, label="remaining unlinked", stdout=self.stdout)
+            if topic:
+                queryset = queryset.filter(
+                    source__topic=topic,
+                )
+
+            return queryset.count()
+
+        remaining = db_retry(
+            remaining_unlinked,
+            label="remaining unlinked",
+            stdout=self.stdout,
+        )
 
         self.stdout.write(
             f"[cluster_events] DONE | eventitems_attempted={len(rows)} | unlinked(after)={remaining}"
