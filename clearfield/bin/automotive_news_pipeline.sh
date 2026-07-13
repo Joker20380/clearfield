@@ -359,8 +359,8 @@ print(
   echo "Generation errors after:  $ERROR_COUNT_AFTER"
 
   if [ "$ERROR_COUNT_AFTER" -gt "$ERROR_COUNT_BEFORE" ]; then
-    echo "ERROR: new automotive generation errors detected." >&2
-    exit 1
+    echo "WARNING: new automotive generation errors detected; continuing with successful news."
+    echo "Successful generated news will continue to editorial approval and export."
   fi
 else
   echo "No ready automotive briefs; LLM generation skipped."
