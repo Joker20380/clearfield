@@ -570,7 +570,7 @@ class Command(BaseCommand):
             AutomotiveBrief.objects
             .filter(status=status)
             .select_related("event")
-            .order_by("id")
+            .order_by("-created_at", "-id")
         )
 
         if requested_ids:

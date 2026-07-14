@@ -9,6 +9,7 @@ from django.core.management.base import (
 from django.db import transaction
 
 from intel.automotive_editorial_validation import (
+    minimum_body_chars_for_brief,
     validate_automotive_news,
 )
 from intel.models import (
@@ -65,6 +66,14 @@ def approval_errors(
         )
         return errors
 
+    effective_min_body_chars = (
+        min_body_chars
+        if min_body_chars > 0
+        else minimum_body_chars_for_brief(
+            news.brief
+        )
+    )
+
     if news.quality_score < min_score:
         errors.append(
             f"low-quality-score:{news.quality_score}"
@@ -89,7 +98,9 @@ def approval_errors(
             ),
             image_topic=news.image_topic,
             source_urls=news.source_urls,
-            min_body_chars=min_body_chars,
+            min_body_chars=(
+                effective_min_body_chars
+            ),
         )
     )
 
@@ -120,7 +131,12 @@ class Command(BaseCommand):
         parser.add_argument(
             "--min-body-chars",
             type=int,
-            default=1000,
+            default=0,
+            help=(
+                "Явный минимальный объём. "
+                "Значение 0 использует динамический "
+                "порог конкретного AutomotiveBrief."
+            ),
         )
 
         parser.add_argument(
@@ -163,7 +179,7 @@ class Command(BaseCommand):
 
         min_body_chars = max(
             int(options["min_body_chars"]),
-            1,
+            0,
         )
 
         requested_ids = parse_ids(
