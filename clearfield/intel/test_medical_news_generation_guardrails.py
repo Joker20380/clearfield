@@ -185,6 +185,22 @@ class MedicalNewsGenerationGuardrailsTests(
             prompt,
         )
 
+        self.assertIn(
+            (
+                "Не превращай результат лечения "
+                "одного пациента в общий вывод"
+            ),
+            prompt,
+        )
+
+        self.assertIn(
+            (
+                "Не обобщай результат единичного "
+                "клинического случая"
+            ),
+            SYSTEM_PROMPT,
+        )
+
         self.assertNotIn(
             (
                 "Подготовка зависит от конкретного "
