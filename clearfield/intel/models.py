@@ -250,6 +250,62 @@ class MedicalBrief(models.Model):
         help_text="Дополнительные ключевые фразы, по одной на строку.",
     )
 
+    # Детерминированная SEO-привязка к реальной посадочной
+    # странице анализа в каталоге КДЛ «Дзагуров».
+    semantic_panel_id = models.PositiveBigIntegerField(
+        "ID панели КДЛ «Дзагуров»",
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="ID панели в каталоге КДЛ «Дзагуров».",
+    )
+    semantic_panel_code = models.CharField(
+        "Код анализа КДЛ «Дзагуров»",
+        max_length=64,
+        blank=True,
+        help_text="Код анализа в каталоге КДЛ «Дзагуров».",
+    )
+    semantic_panel_title = models.TextField(
+        "Название карточки анализа",
+        blank=True,
+        help_text="Название выбранной карточки анализа.",
+    )
+    semantic_panel_url = models.URLField(
+        "URL карточки анализа",
+        max_length=500,
+        blank=True,
+        help_text="Абсолютный URL выбранной карточки анализа.",
+    )
+    semantic_anchor = models.CharField(
+        "Анкор внутренней ссылки",
+        max_length=500,
+        blank=True,
+        help_text="Анкор внутренней ссылки на карточку анализа.",
+    )
+    semantic_score = models.IntegerField(
+        "Оценка семантического совпадения",
+        default=0,
+        help_text="Итоговая оценка релевантности выбранной карточки.",
+    )
+    semantic_match_details = models.JSONField(
+        "Детали семантического совпадения",
+        default=dict,
+        blank=True,
+        help_text="Детали детерминированного сопоставления.",
+    )
+    semantic_feed_sha256 = models.CharField(
+        "SHA256 семантического каталога",
+        max_length=64,
+        blank=True,
+        help_text="SHA256 semantic feed, по которому выполнен подбор.",
+    )
+    semantic_assigned_at = models.DateTimeField(
+        "Дата назначения посадочной страницы",
+        null=True,
+        blank=True,
+        help_text="Дата последнего назначения посадочной страницы.",
+    )
+
     facts = models.TextField(
         blank=True,
         help_text="Подтверждённые факты, которые можно использовать в тексте.",
@@ -989,6 +1045,17 @@ _RUSSIAN_FIELD_NAMES = {
     "angle": "Редакционный ракурс",
     "target_keyword": "Главная SEO-фраза",
     "secondary_keywords": "Дополнительные SEO-фразы",
+
+    "semantic_panel_id": "ID панели КДЛ «Дзагуров»",
+    "semantic_panel_code": "Код анализа КДЛ «Дзагуров»",
+    "semantic_panel_title": "Название карточки анализа",
+    "semantic_panel_url": "URL карточки анализа",
+    "semantic_anchor": "Анкор внутренней ссылки",
+    "semantic_score": "Оценка семантического совпадения",
+    "semantic_match_details": "Детали семантического совпадения",
+    "semantic_feed_sha256": "SHA256 семантического каталога",
+    "semantic_assigned_at": "Дата назначения посадочной страницы",
+
     "facts": "Подтверждённые факты",
     "source_urls": "Ссылки на источники",
     "audience": "Целевая аудитория",

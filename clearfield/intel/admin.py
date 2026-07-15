@@ -638,6 +638,7 @@ class MedicalBriefAdmin(admin.ModelAdmin):
         "status",
         "short_title",
         "target_keyword",
+        "semantic_panel_code",
         "event_link",
         "generated_count",
         "created_at",
@@ -654,6 +655,10 @@ class MedicalBriefAdmin(admin.ModelAdmin):
         "angle",
         "target_keyword",
         "secondary_keywords",
+        "semantic_panel_code",
+        "semantic_panel_title",
+        "semantic_panel_url",
+        "semantic_anchor",
         "facts",
         "source_urls",
         "event__title",
@@ -664,6 +669,15 @@ class MedicalBriefAdmin(admin.ModelAdmin):
         "updated_at",
         "used_at",
         "event_link",
+        "semantic_panel_id",
+        "semantic_panel_code",
+        "semantic_panel_title",
+        "semantic_panel_url",
+        "semantic_anchor",
+        "semantic_score",
+        "semantic_match_details",
+        "semantic_feed_sha256",
+        "semantic_assigned_at",
     )
     autocomplete_fields = (
         "event",
@@ -690,6 +704,22 @@ class MedicalBriefAdmin(admin.ModelAdmin):
                 "target_keyword",
                 "secondary_keywords",
             )
+        }),
+        ("Посадочная страница КДЛ «Дзагуров»", {
+            "fields": (
+                "semantic_panel_id",
+                "semantic_panel_code",
+                "semantic_panel_title",
+                "semantic_panel_url",
+                "semantic_anchor",
+                "semantic_score",
+                "semantic_match_details",
+                "semantic_feed_sha256",
+                "semantic_assigned_at",
+            ),
+            "classes": (
+                "collapse",
+            ),
         }),
         ("Факты и источники", {
             "fields": (
