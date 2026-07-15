@@ -194,6 +194,32 @@ echo "[7/10] Audit medical briefs"
 python3 manage.py audit_medical_briefs \
   --status ready
 
+echo "[7.5/10] Assign deterministic semantic panels"
+
+SEMANTIC_FEED="${MEDICAL_SEMANTIC_FEED:-var/medical-semantic-feed.json}"
+SEMANTIC_ENABLED="${MEDICAL_SEMANTIC_ASSIGN_ENABLED:-1}"
+
+if [ "$SEMANTIC_ENABLED" = "1" ] && [ -s "$SEMANTIC_FEED" ]; then
+  python3 manage.py assign_medical_semantic_panels \
+    --feed "$SEMANTIC_FEED" \
+    --status ready \
+    --limit 20 \
+    --top 3 \
+    --min-score 230 \
+    --min-margin 20 \
+    --apply
+else
+  echo "Semantic panel assignment skipped."
+  echo "Enabled: $SEMANTIC_ENABLED"
+  echo "Feed: $SEMANTIC_FEED"
+
+  if [ -e "$SEMANTIC_FEED" ]; then
+    ls -lah "$SEMANTIC_FEED"
+  else
+    echo "Semantic feed does not exist."
+  fi
+fi
+
 echo "[8/10] Generate medical news via LLM"
 python3 manage.py generate_medical_news \
   --limit 3
