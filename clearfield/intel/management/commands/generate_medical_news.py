@@ -9,12 +9,15 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import close_old_connections, transaction
 from django.utils import timezone
 from django.utils.text import slugify
+from django.db.models.functions import TruncDate
 
 from intel.llm.ollama_client import (
     OllamaError,
     generate_with_ollama,
     parse_json_response,
 )
+from intel.medical_editorial_validation import unsupported_claim_hits
+
 from intel.models import (
     GeneratedMedicalNews,
     MedicalBrief,
@@ -341,6 +344,17 @@ def validate_medical_safety(brief: MedicalBrief, title: str, body: str) -> list[
                 f"события: {locality_name}"
             )
 
+    unsupported_hits = unsupported_claim_hits(
+        generated_text=f"{title}\n{body}",
+        source_text=source_text,
+    )
+
+    for claim_name in unsupported_hits:
+        errors.append(
+            "Модель добавила неподтверждённое утверждение: "
+            f"{claim_name}"
+        )
+
     raw_generated_text = f"{title}\n{body}"
 
     placeholder_patterns = [
@@ -489,6 +503,29 @@ def validate_medical_safety(brief: MedicalBrief, title: str, body: str) -> list[
 
 
 def build_user_prompt(brief: MedicalBrief) -> str:
+    confirmed_length = len(
+        normalize_text(confirmed_source_text(brief))
+    )
+
+    if confirmed_length < 1200:
+        article_length_instruction = (
+            "Объём: примерно 1000–1800 знаков. "
+            "Источник содержит мало подробностей, поэтому не растягивай "
+            "материал и не заполняй пробелы предположениями. "
+            "Лучше написать короткую фактическую новость."
+        )
+    elif confirmed_length < 2500:
+        article_length_instruction = (
+            "Объём: примерно 1600–2800 знаков. "
+            "Не увеличивай объём за счёт неподтверждённых услуг, целей, "
+            "эффектов, маршрутов или организационных деталей."
+        )
+    else:
+        article_length_instruction = (
+            "Объём: примерно 2500–5000 знаков, только в пределах "
+            "подтверждённых исходных данных."
+        )
+
     disclaimer = get_medical_news_disclaimer()
 
     seo_keyword = (
@@ -532,7 +569,7 @@ def build_user_prompt(brief: MedicalBrief) -> str:
 
 Требования:
 - Напиши материал на русском языке.
-- Объём: примерно 3500–6000 знаков.
+- {article_length_instruction}
 - Используй Markdown.
 - Начни с короткого введения.
 - Используй несколько подзаголовков по теме исходного события.
@@ -784,7 +821,15 @@ class Command(BaseCommand):
             MedicalBrief.objects
             .filter(status=status)
             .select_related("event")
-            .order_by("created_at")
+            .annotate(
+                created_day=TruncDate(
+                    "created_at"
+                )
+            )
+            .order_by(
+                "-created_day",
+                "id",
+            )
         )
 
         if requested_brief_ids:

@@ -1,7 +1,8 @@
 import re
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
+from intel.medical_editorial_validation import unsupported_claim_hits
 from intel.models import GeneratedMedicalNews
 
 
@@ -161,34 +162,62 @@ def invented_locality_hits(item, generated_text):
 
 
 def append_brand_cta_if_missing(item):
-    title = get_first_existing(item, ["title", "headline", "name"])
-    body_field = get_body_field_name(item)
+    """
+    Автоматическая вставка рекламного CTA временно отключена.
 
-    if not body_field:
-        return False, "no-body-field"
+    Медицинская или региональная тематика сама по себе не является
+    достаточным основанием для добавления блока лаборатории.
+    """
 
-    body = getattr(item, body_field) or ""
-    combined = f"{title}\n{body}"
+    return False, "brand-cta-disabled"
 
-    if has_any(combined, BRAND_WORDS):
-        return False, "brand-already-exists"
 
-    body = str(body).rstrip()
-    new_body = f"{body}\n\n{BRAND_CTA}"
+def parse_ids(raw_value):
+    raw_value = str(raw_value or "").strip()
 
-    setattr(item, body_field, new_body)
-    item.save(update_fields=[body_field])
+    if not raw_value:
+        return []
 
-    return True, "brand-cta-added"
+    result = []
+
+    for token in re.split(r"[\s,;]+", raw_value):
+        if not token:
+            continue
+
+        try:
+            value = int(token)
+        except ValueError as exc:
+            raise CommandError(
+                "Некорректный GeneratedMedicalNews "
+                f"ID: {token}"
+            ) from exc
+
+        if value <= 0:
+            raise CommandError(
+                "Некорректный GeneratedMedicalNews "
+                f"ID: {token}"
+            )
+
+        result.append(value)
+
+    return list(dict.fromkeys(result))
 
 
 class Command(BaseCommand):
-    help = "Automatically approve generated medical news after quality checks and brand CTA injection."
+    help = "Automatically approve generated medical news after deterministic editorial checks."
 
     def add_arguments(self, parser):
         parser.add_argument("--status", default="review")
         parser.add_argument("--limit", type=int, default=10)
         parser.add_argument("--min-chars", type=int, default=1700)
+        parser.add_argument(
+            "--news-ids",
+            default="",
+            help=(
+                "ID GeneratedMedicalNews через "
+                "запятую, пробел или точку с запятой."
+            ),
+        )
         parser.add_argument("--dry-run", action="store_true")
         parser.add_argument("--show-rejected", action="store_true")
 
@@ -198,13 +227,23 @@ class Command(BaseCommand):
         min_chars = options["min_chars"]
         dry_run = options["dry_run"]
         show_rejected = options["show_rejected"]
+        requested_ids = parse_ids(
+            options["news_ids"]
+        )
 
         qs = (
             GeneratedMedicalNews.objects
             .filter(status=status)
             .select_related("brief", "brief__event")
-            .order_by("-id")[:limit]
+            .order_by("-id")
         )
+
+        if requested_ids:
+            qs = qs.filter(
+                id__in=requested_ids,
+            )
+
+        qs = qs[:limit]
 
         checked = 0
         approved = 0
@@ -244,8 +283,25 @@ class Command(BaseCommand):
             if len(normalize(title)) < 18:
                 reasons.append("short-title")
 
-            if len(normalize(body)) < min_chars:
-                reasons.append(f"short-body:{len(normalize(body))}")
+            normalized_body_length = len(normalize(body))
+            source_length = len(confirmed_source_text(item))
+
+            # Короткий официальный анонс не следует искусственно
+            # растягивать ради общего порога 1700 символов.
+            required_min_chars = (
+                900
+                if source_length < 1200
+                else 1300
+                if source_length < 2500
+                else min_chars
+            )
+
+            if normalized_body_length < required_min_chars:
+                reasons.append(
+                    "short-body:"
+                    f"{normalized_body_length}"
+                    f"<{required_min_chars}"
+                )
 
             if has_bad_pattern(combined):
                 reasons.append("bad-llm-artifact")
@@ -259,6 +315,17 @@ class Command(BaseCommand):
                 reasons.append(
                     "invented-locality:"
                     + ",".join(locality_hits)
+                )
+
+            claim_hits = unsupported_claim_hits(
+                generated_text=combined,
+                source_text=confirmed_source_text(item),
+            )
+
+            if claim_hits:
+                reasons.append(
+                    "unsupported-claims:"
+                    + ",".join(claim_hits)
                 )
 
             if not has_any(combined, REQUIRED_MEDICAL_WORDS):
@@ -279,7 +346,7 @@ class Command(BaseCommand):
 
             if not has_any(combined, BRAND_WORDS):
                 if dry_run:
-                    brand_action = "would-add-brand-cta"
+                    brand_action = "brand-cta-disabled"
                 else:
                     _, brand_action = append_brand_cta_if_missing(item)
 
