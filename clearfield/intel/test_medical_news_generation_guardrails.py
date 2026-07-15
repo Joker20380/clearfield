@@ -1,10 +1,14 @@
+import inspect
 from types import SimpleNamespace
 
 from django.test import SimpleTestCase
 
 from intel.management.commands.generate_medical_news import (
     SYSTEM_PROMPT,
+    Command,
+    apply_system_disclaimer,
     build_user_prompt,
+    get_medical_news_disclaimer,
     markdown_section_count,
     medical_editorial_meta_hits,
 )
@@ -82,6 +86,69 @@ class MedicalNewsGenerationGuardrailsTests(
             hits,
         )
 
+    def test_detects_duplicate_system_disclaimer(
+        self,
+    ):
+        disclaimer = (
+            get_medical_news_disclaimer()
+        )
+
+        self.assertIn(
+            "duplicate-system-disclaimer",
+            medical_editorial_meta_hits(
+                disclaimer
+            ),
+        )
+
+    def test_validation_precedes_disclaimer_insertion(
+        self,
+    ):
+        source = inspect.getsource(
+            Command.handle
+        )
+
+        validation_position = source.index(
+            "validate_medical_safety("
+        )
+
+        disclaimer_position = source.index(
+            'payload["body"] = '
+            "apply_system_disclaimer("
+        )
+
+        self.assertLess(
+            validation_position,
+            disclaimer_position,
+        )
+
+    def test_system_adds_exactly_one_disclaimer(
+        self,
+    ):
+        body = (
+            "Введение.\n\n"
+            "## Первый раздел\n\n"
+            "Текст.\n\n"
+            "## Второй раздел\n\n"
+            "Текст."
+        )
+
+        disclaimer = (
+            get_medical_news_disclaimer()
+        )
+
+        result = apply_system_disclaimer(
+            body
+        )
+
+        self.assertEqual(
+            result.count(disclaimer),
+            1,
+        )
+
+        self.assertTrue(
+            result.endswith(disclaimer)
+        )
+
     def test_counts_markdown_sections(
         self,
     ):
@@ -122,6 +189,22 @@ class MedicalNewsGenerationGuardrailsTests(
             (
                 "Подготовка зависит от конкретного "
                 "исследования"
+            ),
+            SYSTEM_PROMPT,
+        )
+
+        self.assertNotIn(
+            (
+                "Обязательно указывай, что материал "
+                "информационный"
+            ),
+            SYSTEM_PROMPT,
+        )
+
+        self.assertIn(
+            (
+                "система автоматически добавит один "
+                "стандартный дисклеймер"
             ),
             SYSTEM_PROMPT,
         )
