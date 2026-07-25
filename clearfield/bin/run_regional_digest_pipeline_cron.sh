@@ -45,6 +45,13 @@ MOSCOW_DATE="$(
   TZ=Europe/Moscow date '+%F'
 )"
 
+SYNC_MARKER="${RUN_DIR}/regional-digest-synced-${MOSCOW_DATE}.ok"
+
+if [[ "${REGIONAL_DIGEST_SCHEDULED:-0}" == "1" ]] \
+  && [[ -f "$SYNC_MARKER" ]]; then
+  exit 0
+fi
+
 LOG_FILE="${LOG_DIR}/regional-digest-${MOSCOW_DATE}.log"
 LOCK_FILE="${RUN_DIR}/regional-digest.lock"
 
@@ -165,3 +172,18 @@ python manage.py export_regional_digest_feed \
   --limit 365 \
   --public-dir "${PROJECT_DIR}/../generated-news" \
   --show-content-size
+
+echo
+echo "=== SYNCHRONIZE REGIONAL DIGEST TO DZAGUROV ==="
+
+"${PROJECT_DIR}/bin/sync_regional_digest_to_dzagurov.sh"
+
+touch "$SYNC_MARKER"
+
+find "$RUN_DIR" \
+  -maxdepth 1 \
+  -type f \
+  -name 'regional-digest-synced-*.ok' \
+  -mtime +7 \
+  -delete \
+  2>/dev/null || true

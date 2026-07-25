@@ -547,6 +547,7 @@ class Command(BaseCommand):
 
         composition_success = False
         composition_errors = []
+        retry_feedback = ""
 
         for attempt in range(
             1,
@@ -564,6 +565,7 @@ class Command(BaseCommand):
                     "digest_id": digest.id,
                     "execute": True,
                     "compose_only": True,
+                    "retry_feedback": retry_feedback,
                 }
 
                 if (
@@ -600,7 +602,17 @@ class Command(BaseCommand):
                 )
 
             except Exception as exc:
-                composition_errors.append(str(exc))
+                error_text = str(exc)
+                composition_errors.append(error_text)
+
+                retry_feedback = (
+                    "Предыдущая попытка отклонена валидатором: "
+                    + error_text[:1800]
+                    + "\nИсправь именно эту ошибку. "
+                    + "Не копируй значения-примеры из JSON-схемы "
+                    + "и не добавляй сведения вне fact_ids."
+                )
+
                 digest.refresh_from_db()
 
                 self.stderr.write(

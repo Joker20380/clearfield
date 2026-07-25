@@ -317,13 +317,6 @@ def evidence_fingerprint(
 def build_fact_prompt(
     evidence_pack: dict[str, Any],
 ) -> str:
-    site_semantic_core = select_site_semantic_core(
-        digest,
-        fact_pack,
-    )
-
-    article_input["site_semantic_core"] = site_semantic_core
-
     schema = {
         "source_sufficient": True,
         "reason": "",
@@ -770,6 +763,66 @@ def semantic_core_text_from_digest(
     return "\n".join(chunks)
 
 
+SEMANTIC_TRIGGER_OVERRIDES = {
+    # Не активировать профилактическое ядро от любого
+    # упоминания обычного осмотра или проверки помещений.
+    "prevention": (
+        "профилактик",
+        "профилактический осмотр",
+        "диспансеризац",
+        "медицинский скрининг",
+        "скрининговое обследование",
+        "контроль состояния здоровья",
+    ),
+
+    # Слово «санитарный» само по себе не означает,
+    # что материал посвящён инфекциям или ПЦР.
+    "infection": (
+        "инфекц",
+        "вирус",
+        "вич",
+        "спид",
+        "пцр",
+        "серолог",
+        "бактери",
+        "заражен",
+        "заражён",
+    ),
+
+    # Не использовать короткий корень «дет»:
+    # он создаёт случайные совпадения внутри других слов.
+    "children": (
+        "ребен",
+        "ребён",
+        "дети",
+        "детей",
+        "детям",
+        "детск",
+        "педиатр",
+        "новорожден",
+        "подрост",
+    ),
+}
+
+
+def semantic_group_triggers(
+    group: dict[str, Any],
+) -> tuple[str, ...]:
+    key = str(group.get("key") or "")
+
+    overridden = SEMANTIC_TRIGGER_OVERRIDES.get(
+        key
+    )
+
+    if overridden is not None:
+        return tuple(overridden)
+
+    return tuple(
+        group.get("triggers")
+        or ()
+    )
+
+
 def select_site_semantic_core_from_text(
     text: str,
     *,
@@ -780,7 +833,9 @@ def select_site_semantic_core_from_text(
     selected = []
 
     for group in SITE_SEMANTIC_CORE:
-        triggers = group.get("triggers") or []
+        triggers = semantic_group_triggers(
+            group
+        )
         is_always = bool(group.get("always"))
 
         if not is_always and not any(
@@ -797,6 +852,12 @@ def select_site_semantic_core_from_text(
                     group["phrases"][:max_phrases_per_group]
                 ),
                 "patient_context": group["patient_context"],
+                "required": not is_always,
+                "selection_mode": (
+                    "fallback"
+                    if is_always
+                    else "triggered"
+                ),
             }
         )
 
@@ -861,9 +922,240 @@ def semantic_phrase_occurrences(
     return occurrences
 
 
+def article_facts_for_composition(
+    fact_pack: dict[str, Any],
+) -> list[dict[str, Any]]:
+    allowed_fields = (
+        "fact_id",
+        "event_id",
+        "source_ids",
+        "statement",
+        "fact_type",
+    )
+
+    return [
+        {
+            field: fact.get(field)
+            for field in allowed_fields
+            if field in fact
+        }
+        for fact in (
+            fact_pack.get("facts")
+            or []
+        )
+    ]
+
+
+def article_fact_support_text(
+    fact_pack: dict[str, Any],
+) -> str:
+    return "\n".join(
+        str(fact.get("statement") or "")
+        for fact in (
+            fact_pack.get("facts")
+            or []
+        )
+    )
+
+
+def validate_meta_description_length(
+    meta_description: str,
+) -> None:
+    length = len(
+        str(meta_description or "").strip()
+    )
+
+    if length < 120:
+        raise CommandError(
+            "Generated meta_description is too short: "
+            f"{length} < 120"
+        )
+
+    if length > 180:
+        raise CommandError(
+            "Generated meta_description is too long: "
+            f"{length} > 180"
+        )
+
+
+def compact_meta_description(
+    value: str,
+    *,
+    max_length: int = 180,
+) -> str:
+    text = re.sub(
+        r"\s+",
+        " ",
+        str(value or ""),
+    ).strip()
+
+    if len(text) <= max_length:
+        return text
+
+    window = text[:max_length + 1]
+
+    sentence_cut = max(
+        window.rfind(". "),
+        window.rfind("! "),
+        window.rfind("? "),
+    )
+
+    if sentence_cut >= 119:
+        return window[
+            :sentence_cut + 1
+        ].strip()
+
+    word_cut = window.rfind(
+        " ",
+        119,
+        max_length + 1,
+    )
+
+    if word_cut < 0:
+        word_cut = window.rfind(" ")
+
+    if word_cut < 0:
+        result = window[:max_length]
+    else:
+        result = window[:word_cut]
+
+    result = result.rstrip(
+        " ,;:–—-"
+    )
+
+    if not result.endswith(
+        (".", "!", "?")
+    ):
+        if len(result) >= max_length:
+            result = result[
+                :max_length - 1
+            ].rstrip()
+
+        result += "."
+
+    return result[:max_length]
+
+
+def normalize_single_event_sections(
+    payload: dict[str, Any],
+    fact_pack: dict[str, Any],
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return payload
+
+    event_ids = {
+        str(fact.get("event_id") or "").strip()
+        for fact in (
+            fact_pack.get("facts")
+            or []
+        )
+        if str(
+            fact.get("event_id")
+            or ""
+        ).strip()
+    }
+
+    if len(event_ids) != 1:
+        return payload
+
+    blocks = payload.get("blocks")
+
+    if not isinstance(blocks, list):
+        return payload
+
+    section_blocks = [
+        block
+        for block in blocks
+        if (
+            isinstance(block, dict)
+            and block.get("kind") == "section"
+        )
+    ]
+
+    if len(section_blocks) <= 1:
+        return payload
+
+    merged_texts = []
+    merged_fact_ids = []
+
+    for block in section_blocks:
+        block_text = str(
+            block.get("text")
+            or ""
+        ).strip()
+
+        if (
+            block_text
+            and block_text not in merged_texts
+        ):
+            merged_texts.append(block_text)
+
+        for fact_id in (
+            block.get("fact_ids")
+            or []
+        ):
+            fact_id = str(
+                fact_id or ""
+            ).strip()
+
+            if (
+                fact_id
+                and fact_id
+                not in merged_fact_ids
+            ):
+                merged_fact_ids.append(
+                    fact_id
+                )
+
+    first_section = dict(
+        section_blocks[0]
+    )
+
+    first_section["text"] = (
+        "\n\n".join(merged_texts)
+    )
+
+    first_section["fact_ids"] = (
+        merged_fact_ids
+    )
+
+    normalized_blocks = []
+    section_inserted = False
+
+    for block in blocks:
+        if not isinstance(block, dict):
+            normalized_blocks.append(block)
+            continue
+
+        if block.get("kind") != "section":
+            normalized_blocks.append(
+                dict(block)
+            )
+            continue
+
+        if section_inserted:
+            continue
+
+        normalized_blocks.append(
+            first_section
+        )
+
+        section_inserted = True
+
+    normalized_payload = dict(payload)
+
+    normalized_payload["blocks"] = (
+        normalized_blocks
+    )
+
+    return normalized_payload
+
+
 def build_article_prompt(
     digest: RegionalDigest,
     fact_pack: dict[str, Any],
+    *,
+    retry_feedback: str = "",
 ) -> str:
     article_input = {
         "region": {
@@ -875,8 +1167,34 @@ def build_article_prompt(
             "start": digest.period_start.isoformat(),
             "end": digest.period_end.isoformat(),
         },
-        "facts": fact_pack["facts"],
+        "facts": article_facts_for_composition(
+            fact_pack
+        ),
     }
+
+    site_semantic_core = select_site_semantic_core(
+        digest,
+        fact_pack,
+    )
+
+    article_input["site_semantic_core"] = (
+        site_semantic_core
+    )
+
+    retry_feedback = str(
+        retry_feedback or ""
+    ).strip()
+
+    retry_section = ""
+
+    if retry_feedback:
+        retry_section = (
+            "\n\nИСПРАВЛЕНИЕ ПРЕДЫДУЩЕЙ ПОПЫТКИ:\n"
+            + retry_feedback[:2000]
+            + "\nСформируй полностью новый JSON. "
+            + "Исправь указанную ошибку, но не добавляй "
+            + "факты, которых нет в ПРОВЕРЕННЫХ ФАКТАХ."
+        )
 
     schema = {
         "title": (
@@ -885,7 +1203,9 @@ def build_article_prompt(
         ),
         "slug": "zdravookhranenie-severnoy-osetii-obzor",
         "meta_description": (
-            "Краткое описание регионального дайджеста."
+            "В регионе зафиксированы два события в сфере "
+            "здравоохранения; дайджест передаёт подтверждённые "
+            "факты без оценок и неподтверждённых выводов."
         ),
         "image_topic": "healthcare_region",
         "blocks": [
@@ -919,23 +1239,50 @@ def build_article_prompt(
 
     return (
         "Подготовь уникальный региональный медицинский "
-        "дайджест только из переданных атомарных фактов.\n\n"
+        "дайджест только из переданных атомарных фактов. "
+        "Поле statement является единственным разрешённым "
+        "источником содержания статьи. Не добавляй имена, "
+        "процедуры, выводы и подробности, которых нет в "
+        "statement.\n\n"
         "Каждый блок обязан иметь непустой fact_ids. "
-        "Один раздел должен описывать одно событие. "
-        "Используй все события из фактов.\n\n"
+        "Количество блоков kind=section должно точно "
+        "совпадать с количеством уникальных event_id. "
+        "Для каждого события создай ровно один section. "
+        "Если событие одно, создай ровно один section "
+        "и помести в него все факты этого события. "
+        "Не разделяй одно событие на несколько тематических "
+        "section. Используй все события из фактов.\n\n"
         "Не вставляй source_ids и fact_ids в пользовательский "
         "текст: они нужны только в JSON для проверки.\n\n"
+        "Поле meta_description обязательно должно быть "
+        "уникальным, фактическим и содержать от 120 до 180 "
+        "символов с пробелами. Не копируй текст-пример из "
+        "схемы. Не используй общие заглушки вроде «краткое "
+        "описание регионального дайджеста».\n\n"
         "СЕМАНТИЧЕСКОЕ ЯДРО САЙТА:\n"
         "В поле site_semantic_core переданы разрешённые фразы "
-        "семантического ядра лабораторного сайта. Используй их "
-        "естественно как пациентский контекст, а не как список "
-        "ключевых слов. В тексте должны появиться 2-4 наиболее "
-        "релевантные фразы из ядра, если они подходят теме. "
+        "семантического ядра лабораторного сайта. У каждой "
+        "группы есть поле required. Для группы с required=true "
+        "естественно используй хотя бы одну подходящую фразу. "
+        "Для группы с required=false фразы необязательны: "
+        "используй их только при прямой связи с фактами. "
+        "Не вставляй лабораторную фразу только ради SEO. "
+        "Всего используй не более 2-4 релевантных фраз. "
         "Не добавляй нерелевантные анализы. Не утверждай, что "
-        "пациент обязан сдать конкретный анализ. Допустимые "
-        "формулировки: 'может быть связано с', 'врач может "
-        "назначить', 'используется для оценки', 'помогает "
-        "уточнить состояние'. Не используй рекламные обещания "
+        "пациент обязан сдать конкретный анализ. "
+        "Не формулируй неподтверждённые ожидаемые эффекты: "
+        "не пиши, что меры улучшат, повысят, обеспечат, "
+        "ускорят или приведут к повышению качества. "
+        "В title, meta_description и blocks вообще не используй "
+        "слова и словоформы с корнями «улучш», «повыш», "
+        "«обеспеч», «ускор» и «эффектив». Не добавляй выводы "
+        "о пользе, последствиях, результативности и ожидаемом "
+        "влиянии описанных событий. Пациентский контекст "
+        "разрешён только как нейтральное напоминание о том, "
+        "что выбор обследования и интерпретацию результатов "
+        "выполняет врач. Не связывай события с предполагаемой "
+        "пользой, доступностью или качеством медицинской помощи. "
+        "Не используй рекламные обещания "
         "и не набивай текст повторяющимися ключами.\n\n"
         "Ожидаемая схема:\n"
         + json.dumps(
@@ -949,6 +1296,7 @@ def build_article_prompt(
             ensure_ascii=False,
             indent=2,
         )
+        + retry_section
     )
 
 
@@ -1153,6 +1501,51 @@ def all_source_text(
     return "\n".join(chunks)
 
 
+COMPOSITION_PROCEDURAL_CLAIM_PATTERNS = (
+    (
+        r"\bжалоб\w*",
+        "сведения о жалобах",
+    ),
+    (
+        r"\bадвокат\w*",
+        "сведения об адвокатах",
+    ),
+    (
+        r"\bродствен\w*",
+        "сведения о родственниках",
+    ),
+    (
+        r"\b(?:прав\w*\s+)?удерживаем\w*",
+        "сведения о правах удерживаемых лиц",
+    ),
+    (
+        r"\bсоответств\w*\s+"
+        r"(?:требован\w*|законодательств\w*)",
+        "утверждение о соответствии требованиям",
+    ),
+    (
+        r"\bоптимизац\w*",
+        "утверждение об оптимизации",
+    ),
+    (
+        r"\bмобильн\w*\s+узл\w*\s+связ\w*",
+        "сведения о мобильном узле связи",
+    ),
+    (
+        r"\bбеспилот\w*",
+        "сведения о беспилотных системах",
+    ),
+    (
+        r"\bпресс[- ]центр\w*",
+        "сведения о пресс-центре",
+    ),
+    (
+        r"\bрадиационно[- ]хим\w*",
+        "сведения о радиационно-химическом наблюдении",
+    ),
+)
+
+
 def validate_article_payload(
     payload: dict[str, Any],
     fact_pack: dict[str, Any],
@@ -1179,10 +1572,9 @@ def validate_article_payload(
             "Generated digest title is too short"
         )
 
-    if len(normalize(meta_description)) < 80:
-        raise CommandError(
-            "Generated meta_description is too short"
-        )
+    validate_meta_description_length(
+        meta_description
+    )
 
     if not isinstance(raw_blocks, list):
         raise CommandError(
@@ -1540,13 +1932,10 @@ def validate_article_payload(
             "a future event into a completed event"
         )
 
-    fact_support_text = "\n".join(
-        [
-            str(fact.get("statement") or "")
-            + "\n"
-            + str(fact.get("evidence_quote") or "")
-            for fact in fact_pack["facts"]
-        ]
+    fact_support_text = (
+        article_fact_support_text(
+            fact_pack
+        )
     )
 
     composition_text = "\n".join(
@@ -1558,7 +1947,8 @@ def validate_article_payload(
     )
 
     for pattern, description in (
-        COMPOSITION_CLAIM_PATTERNS
+        *COMPOSITION_CLAIM_PATTERNS,
+        *COMPOSITION_PROCEDURAL_CLAIM_PATTERNS,
     ):
         if (
             re.search(
@@ -1620,9 +2010,25 @@ def validate_article_payload(
         site_semantic_core,
     )
 
-    if site_semantic_core and not used_site_semantic_phrases:
+    required_site_semantic_core = [
+        group
+        for group in site_semantic_core
+        if group.get("required", True)
+    ]
+
+    used_required_site_semantic_phrases = (
+        semantic_phrase_hits(
+            body,
+            required_site_semantic_core,
+        )
+    )
+
+    if (
+        required_site_semantic_core
+        and not used_required_site_semantic_phrases
+    ):
         raise CommandError(
-            "Generated digest did not use any allowed "
+            "Generated digest did not use any required "
             "site semantic core phrase"
         )
 
@@ -1676,6 +2082,12 @@ def validate_article_payload(
         "used_event_ids": sorted(used_event_ids),
         "site_semantic_core": site_semantic_core,
         "used_site_semantic_phrases": used_site_semantic_phrases,
+        "required_site_semantic_core": (
+            required_site_semantic_core
+        ),
+        "used_required_site_semantic_phrases": (
+            used_required_site_semantic_phrases
+        ),
     }
 
     return {
@@ -1705,6 +2117,14 @@ class Command(BaseCommand):
         parser.add_argument(
             "--model",
             default="",
+        )
+        parser.add_argument(
+            "--retry-feedback",
+            default="",
+            help=(
+                "Ошибка предыдущей попытки композиции, "
+                "которую модель должна исправить."
+            ),
         )
         parser.add_argument(
             "--execute",
@@ -1882,6 +2302,9 @@ class Command(BaseCommand):
         original_digest_had_body = bool(digest.body)
 
         total_elapsed_ms = 0
+        article_prompt = ""
+        article_result = None
+        raw_article_payload = None
 
         try:
             current_fingerprint = evidence_fingerprint(
@@ -2141,6 +2564,10 @@ class Command(BaseCommand):
             article_prompt = build_article_prompt(
                 digest,
                 fact_pack,
+                retry_feedback=options.get(
+                    "retry_feedback",
+                    "",
+                ),
             )
 
             close_old_connections()
@@ -2156,6 +2583,48 @@ class Command(BaseCommand):
 
             raw_article_payload = parse_json_response(
                 article_result.text
+            )
+
+            if not isinstance(
+                raw_article_payload,
+                dict,
+            ):
+                raise CommandError(
+                    "Article response must be "
+                    "a JSON object"
+                )
+
+            original_meta_description = str(
+                raw_article_payload.get(
+                    "meta_description"
+                )
+                or ""
+            ).strip()
+
+            compacted_meta_description = (
+                compact_meta_description(
+                    original_meta_description
+                )
+            )
+
+            if (
+                compacted_meta_description
+                != original_meta_description
+            ):
+                raw_article_payload = dict(
+                    raw_article_payload
+                )
+
+                raw_article_payload[
+                    "meta_description"
+                ] = compacted_meta_description
+
+
+            raw_article_payload = (
+                normalize_single_event_sections(
+                    raw_article_payload,
+                    fact_pack,
+                )
             )
 
             article = validate_article_payload(
@@ -2308,6 +2777,53 @@ class Command(BaseCommand):
                     total_elapsed_ms or None
                 ),
             }
+
+            if article_result is not None:
+                failure_audit = {
+                    "fact_extraction": fact_stage_audit,
+                    "article_generation": {
+                        "stage": "validation-failed",
+                        "validation_error": str(exc),
+                        "model": article_result.model,
+                        "elapsed_ms": (
+                            article_result.elapsed_ms
+                        ),
+                        "response": article_result.raw,
+                        "parsed_payload": (
+                            raw_article_payload
+                        ),
+                    },
+                }
+
+                failure_update[
+                    "llm_response_raw"
+                ] = json.dumps(
+                    failure_audit,
+                    ensure_ascii=False,
+                    indent=2,
+                    default=str,
+                )
+
+                failure_update[
+                    "llm_model"
+                ] = article_result.model
+
+                if article_prompt:
+                    failure_update[
+                        "llm_prompt"
+                    ] = (
+                        "=== STORED GROUNDED "
+                        "FACT PACK ===\n\n"
+                        + json.dumps(
+                            fact_pack,
+                            ensure_ascii=False,
+                            indent=2,
+                        )
+                        + "\n\n"
+                        + "=== ARTICLE "
+                        "COMPOSITION ===\n\n"
+                        + article_prompt
+                    )
 
             preserve_existing_review = bool(
                 compose_only
