@@ -10,7 +10,7 @@ from django.core.management.base import (
     CommandError,
 )
 from django.db import (
-    close_old_connections,
+    connections,
     transaction,
 )
 from django.utils import timezone
@@ -37,6 +37,13 @@ from intel.models import (
     AutomotiveNewsStatus,
     GeneratedAutomotiveNews,
 )
+
+
+def refresh_old_connections() -> None:
+    """Refresh idle connections without breaking an active transaction."""
+    for connection in connections.all():
+        if not connection.in_atomic_block:
+            connection.close_if_unusable_or_obsolete()
 
 
 SYSTEM_PROMPT = """
@@ -443,7 +450,7 @@ def save_generation_error(
     model: str,
     error: Exception,
 ) -> None:
-    close_old_connections()
+    refresh_old_connections()
 
     values = {
         "title": (
@@ -651,7 +658,7 @@ class Command(BaseCommand):
                 continue
 
             try:
-                close_old_connections()
+                refresh_old_connections()
 
                 result = generate_with_ollama(
                     prompt=prompt,
@@ -737,7 +744,7 @@ class Command(BaseCommand):
                         )
                     )
 
-                close_old_connections()
+                refresh_old_connections()
 
                 with transaction.atomic():
                     news = (

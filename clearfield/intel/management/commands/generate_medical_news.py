@@ -6,7 +6,7 @@ from typing import Any
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
-from django.db import close_old_connections, transaction
+from django.db import connections, transaction
 from django.utils import timezone
 from django.utils.text import slugify
 from django.db.models.functions import TruncDate
@@ -48,6 +48,13 @@ IMAGE_TOPICS = (
 )
 
 DEFAULT_IMAGE_TOPIC = "general_medical_news"
+
+
+def refresh_old_connections() -> None:
+    """Refresh idle connections without breaking an active transaction."""
+    for connection in connections.all():
+        if not connection.in_atomic_block:
+            connection.close_if_unusable_or_obsolete()
 
 
 SYSTEM_PROMPT = """
@@ -831,7 +838,7 @@ def save_generation_error(
     поэтому перед записью всегда закрываем старые соединения.
     """
 
-    close_old_connections()
+    refresh_old_connections()
 
     values = {
         "title": f"Ошибка генерации: {brief_title[:220]}",
@@ -958,7 +965,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR("LLM_DISABLED: установи LLM_ENABLED=True в .env"))
             return
 
-        close_old_connections()
+        refresh_old_connections()
 
         queryset = (
             MedicalBrief.objects
@@ -1005,7 +1012,7 @@ class Command(BaseCommand):
         failed = 0
 
         for brief_id in brief_ids:
-            close_old_connections()
+            refresh_old_connections()
 
             try:
                 brief = MedicalBrief.objects.select_related("event").get(pk=brief_id)
@@ -1029,7 +1036,7 @@ class Command(BaseCommand):
             try:
                 # Перед долгим внешним запросом закрываем DB-соединение:
                 # во время генерации оно всё равно не используется.
-                close_old_connections()
+                refresh_old_connections()
 
                 result = generate_with_ollama(
                     prompt=prompt,
@@ -1063,7 +1070,7 @@ class Command(BaseCommand):
 
                 # После долгого LLM-запроса MySQL мог закрыть idle-соединение.
                 # Поэтому обязательно закрываем старое соединение перед записью.
-                close_old_connections()
+                refresh_old_connections()
 
                 with transaction.atomic():
                     news = GeneratedMedicalNews.objects.create(
