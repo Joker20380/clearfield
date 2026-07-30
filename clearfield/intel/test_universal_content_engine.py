@@ -82,6 +82,19 @@ class UniversalContentEngineTests(TestCase):
         errors = validate_evidence_pack(self.brief)
         self.assertIn("not-enough-source-domains:1<2", errors)
 
+    def test_verifier_prompt_treats_compatible_ranges_as_support(self):
+        from intel.universal_content_engine import (
+            build_factual_verification_prompt,
+        )
+
+        prompt = build_factual_verification_prompt(
+            self.brief,
+            "Показатель описывает период в три месяца. [E1]",
+        )
+
+        self.assertIn("поддерживает хотя бы один", prompt)
+        self.assertIn("«3 месяца» совместимо", prompt)
+
     def test_rejects_thin_evidence_for_long_article(self):
         self.project.policy["min_evidence_chars"] = 1000
         self.project.save(update_fields=["policy", "updated_at"])
