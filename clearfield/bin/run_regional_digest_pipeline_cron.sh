@@ -2,18 +2,14 @@
 
 set -Eeuo pipefail
 
-export HOME="/home/j/joker2038"
 export PATH="/usr/local/bin:/usr/bin:/bin"
 
-PROJECT_DIR="$(
-  cd "$(dirname "${BASH_SOURCE[0]}")/.."
-  pwd
-)"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
 
-VENV_DIR="$(
-  cd "${PROJECT_DIR}/.."
-  pwd
-)/venv"
+PROJECT_DIR="$CLEARFIELD_PROJECT_DIR"
+VENV_DIR="$CLEARFIELD_VENV_DIR"
 
 LOG_DIR="${PROJECT_DIR}/logs/regional_digest"
 RUN_DIR="${PROJECT_DIR}/var/run"
@@ -46,6 +42,7 @@ MOSCOW_DATE="$(
 )"
 
 SYNC_MARKER="${RUN_DIR}/regional-digest-synced-${MOSCOW_DATE}.ok"
+EMPTY_MARKER="${RUN_DIR}/regional-digest-empty-${MOSCOW_DATE}.ok"
 
 if [[ "${REGIONAL_DIGEST_SCHEDULED:-0}" == "1" ]] \
   && [[ -f "$SYNC_MARKER" ]]; then
@@ -142,6 +139,8 @@ echo "Python: $(command -v python)"
 echo "=================================================="
 echo
 
+rm -f "$EMPTY_MARKER"
+
 python manage.py run_regional_digest_pipeline \
   --region north_ossetia \
   --region-label "Северная Осетия" \
@@ -154,7 +153,18 @@ python manage.py run_regional_digest_pipeline \
   --max-candidates 30 \
   --batch-size 10 \
   --fact-retries 2 \
-  --compose-retries 3
+  --compose-retries 3 \
+  --empty-marker "$EMPTY_MARKER"
+
+if [[ -s "$EMPTY_MARKER" ]]; then
+  echo
+  echo "=== NO SUITABLE EVENTS TODAY ==="
+  cat "$EMPTY_MARKER"
+  echo "No digest was created or published."
+
+  touch "$SYNC_MARKER"
+  exit 0
+fi
 
 echo
 echo "=== PUBLISH VALIDATED REGIONAL DIGEST ==="

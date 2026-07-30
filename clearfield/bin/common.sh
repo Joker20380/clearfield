@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+# Shared, relocation-safe paths for Clearfield shell entry points.
+# Every value can be overridden by the environment during deployment.
+
+CLEARFIELD_BIN_DIR="$(
+  cd -- "$(dirname -- "${BASH_SOURCE[0]}")" \
+    && pwd
+)"
+
+CLEARFIELD_PROJECT_DIR="${CLEARFIELD_PROJECT_DIR:-$(
+  cd -- "$CLEARFIELD_BIN_DIR/.." \
+    && pwd
+)}"
+
+CLEARFIELD_PUBLIC_DIR="${CLEARFIELD_PUBLIC_DIR:-$(
+  cd -- "$CLEARFIELD_PROJECT_DIR/.." \
+    && pwd
+)}"
+
+CLEARFIELD_VENV_DIR="${CLEARFIELD_VENV_DIR:-$CLEARFIELD_PUBLIC_DIR/venv}"
+CLEARFIELD_PYTHON="${CLEARFIELD_PYTHON:-$CLEARFIELD_VENV_DIR/bin/python}"
+CLEARFIELD_VENV_ACTIVATE="${CLEARFIELD_VENV_ACTIVATE:-$CLEARFIELD_VENV_DIR/bin/activate}"
+CLEARFIELD_FEED_DIR="${CLEARFIELD_FEED_DIR:-$CLEARFIELD_PUBLIC_DIR/generated-news}"
+
+export CLEARFIELD_BIN_DIR
+export CLEARFIELD_PROJECT_DIR
+export CLEARFIELD_PUBLIC_DIR
+export CLEARFIELD_VENV_DIR
+export CLEARFIELD_PYTHON
+export CLEARFIELD_VENV_ACTIVATE
+export CLEARFIELD_FEED_DIR

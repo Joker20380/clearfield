@@ -12,9 +12,9 @@ PROJECT_DIR="$(
     && pwd
 )"
 
-VENV_ACTIVATE="$PROJECT_DIR/../venv/bin/activate"
+VENV_ACTIVATE="${CLEARFIELD_VENV_ACTIVATE:-$PROJECT_DIR/../venv/bin/activate}"
 
-FEED_DIR="$PROJECT_DIR/../generated-news"
+FEED_DIR="${CLEARFIELD_FEED_DIR:-$PROJECT_DIR/../generated-news}"
 FEED_PATH="$FEED_DIR/generated_automotive_news_feed.json"
 
 LOG_DIR="$PROJECT_DIR/logs/automotive-news"

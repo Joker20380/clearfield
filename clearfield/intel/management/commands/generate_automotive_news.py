@@ -445,37 +445,61 @@ def save_generation_error(
 ) -> None:
     close_old_connections()
 
-    GeneratedAutomotiveNews.objects.create(
-        brief_id=brief.pk,
-        title=(
+    values = {
+        "title": (
             "Ошибка генерации: "
             f"{brief.title[:220]}"
         ),
-        slug=make_automotive_slug(
+        "slug": make_automotive_slug(
             f"automotive-generation-error-{brief.pk}",
             brief.pk,
         ),
-        meta_description="",
-        body="",
-        source_note="",
-        source_urls=normalize_source_urls(
+        "meta_description": "",
+        "body": "",
+        "source_note": "",
+        "source_urls": normalize_source_urls(
             brief.source_urls
         ),
-        image_topic=(
-            "general_automotive_news"
-        ),
-        disclaimer=(
+        "image_topic": "general_automotive_news",
+        "disclaimer": (
             get_automotive_disclaimer()
             if brief.disclaimer_required
             else ""
         ),
-        quality_score=0,
-        status=AutomotiveNewsStatus.ERROR,
-        llm_model=model,
-        llm_prompt=prompt,
-        llm_response_raw="",
-        llm_elapsed_ms=None,
-        llm_error=str(error),
+        "quality_score": 0,
+        "status": AutomotiveNewsStatus.ERROR,
+        "llm_model": model,
+        "llm_prompt": prompt,
+        "llm_response_raw": "",
+        "llm_elapsed_ms": None,
+        "llm_error": str(error),
+    }
+
+    error_news = (
+        GeneratedAutomotiveNews.objects
+        .filter(
+            brief_id=brief.pk,
+            status=AutomotiveNewsStatus.ERROR,
+        )
+        .order_by("-id")
+        .first()
+    )
+
+    if error_news is None:
+        GeneratedAutomotiveNews.objects.create(
+            brief_id=brief.pk,
+            **values,
+        )
+        return
+
+    for field, value in values.items():
+        setattr(error_news, field, value)
+
+    error_news.save(
+        update_fields=[
+            *values.keys(),
+            "updated_at",
+        ]
     )
 
 

@@ -2,10 +2,13 @@
 
 set -uo pipefail
 
-export HOME="/home/j/joker2038"
-export PATH="/home/j/joker2038/clearfield/public_html/venv/bin:/usr/local/bin:/usr/bin:/bin"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
 
-PROJECT_DIR="/home/j/joker2038/clearfield/public_html/clearfield"
+export PATH="$CLEARFIELD_VENV_DIR/bin:/usr/local/bin:/usr/bin:/bin"
+
+PROJECT_DIR="$CLEARFIELD_PROJECT_DIR"
 LOG_DIR="$PROJECT_DIR/logs"
 LOG_FILE="$LOG_DIR/medical-news-cron-$(date +%F).log"
 

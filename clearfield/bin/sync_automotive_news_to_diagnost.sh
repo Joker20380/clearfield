@@ -12,7 +12,7 @@ PROJECT_DIR="$(
     && pwd
 )"
 
-VENV_ACTIVATE="$PROJECT_DIR/../venv/bin/activate"
+VENV_ACTIVATE="${CLEARFIELD_VENV_ACTIVATE:-$PROJECT_DIR/../venv/bin/activate}"
 
 CONFIG_FILE="${AUTOMOTIVE_SYNC_CONFIG:-$PROJECT_DIR/var/automotive-sync.env}"
 
@@ -23,7 +23,7 @@ if [ -f "$CONFIG_FILE" ]; then
   set +a
 fi
 
-FEED_PATH="${AUTOMOTIVE_FEED_PATH:-$PROJECT_DIR/../generated-news/generated_automotive_news_feed.json}"
+FEED_PATH="${AUTOMOTIVE_FEED_PATH:-${CLEARFIELD_FEED_DIR:-$PROJECT_DIR/../generated-news}/generated_automotive_news_feed.json}"
 
 LOCK_DIR="$PROJECT_DIR/var"
 LOCK_FILE="$LOCK_DIR/automotive-news-sync.lock"

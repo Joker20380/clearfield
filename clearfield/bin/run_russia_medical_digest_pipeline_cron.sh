@@ -2,18 +2,14 @@
 
 set -Eeuo pipefail
 
-export HOME="/home/j/joker2038"
 export PATH="/usr/local/bin:/usr/bin:/bin"
 
-PROJECT_DIR="$(
-  cd "$(dirname "${BASH_SOURCE[0]}")/.."
-  pwd
-)"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
 
-VENV_DIR="$(
-  cd "${PROJECT_DIR}/.."
-  pwd
-)/venv"
+PROJECT_DIR="$CLEARFIELD_PROJECT_DIR"
+VENV_DIR="$CLEARFIELD_VENV_DIR"
 
 LOG_DIR="${PROJECT_DIR}/logs/regional_digest"
 RUN_DIR="${PROJECT_DIR}/var/run"

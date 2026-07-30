@@ -2,30 +2,30 @@
 
 set -Eeuo pipefail
 
-export HOME="/home/j/joker2038"
 export PATH="/usr/local/bin:/usr/bin:/bin"
 
-PROJECT_DIR="$(
-  cd "$(dirname "${BASH_SOURCE[0]}")/.."
-  pwd
-)"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
+
+PROJECT_DIR="$CLEARFIELD_PROJECT_DIR"
 
 RUN_DIR="${PROJECT_DIR}/var/run"
 LOG_DIR="${PROJECT_DIR}/logs/llm_tunnel"
 
 LOCK_FILE="${RUN_DIR}/llm-tunnel-watchdog.lock"
 
-IDENTITY_FILE="${HOME}/.ssh/clearfield_llm_tunnel_ed25519"
+IDENTITY_FILE="${CLEARFIELD_LLM_SSH_KEY:-${HOME}/.ssh/clearfield_llm_tunnel_ed25519}"
 
-LOCAL_HOST="127.0.0.1"
-LOCAL_PORT="18081"
+LOCAL_HOST="${CLEARFIELD_LLM_LOCAL_HOST:-127.0.0.1}"
+LOCAL_PORT="${CLEARFIELD_LLM_LOCAL_PORT:-18081}"
 
-REMOTE_HOST="5.11.60.125"
-REMOTE_PORT="2223"
-REMOTE_USER="nadmozg"
+REMOTE_HOST="${CLEARFIELD_LLM_REMOTE_HOST:-5.11.60.125}"
+REMOTE_PORT="${CLEARFIELD_LLM_REMOTE_PORT:-2223}"
+REMOTE_USER="${CLEARFIELD_LLM_REMOTE_USER:-nadmozg}"
 
-REMOTE_TARGET_HOST="127.0.0.1"
-REMOTE_TARGET_PORT="8082"
+REMOTE_TARGET_HOST="${CLEARFIELD_LLM_TARGET_HOST:-127.0.0.1}"
+REMOTE_TARGET_PORT="${CLEARFIELD_LLM_TARGET_PORT:-8082}"
 
 HEALTH_URL="http://${LOCAL_HOST}:${LOCAL_PORT}/health"
 

@@ -2,6 +2,7 @@ import os
 import urllib.error
 import urllib.request
 from datetime import timedelta
+from pathlib import Path
 
 from django.core.management import call_command
 from django.core.management.base import (
@@ -166,6 +167,16 @@ class Command(BaseCommand):
                 "доступности LLM endpoint."
             ),
         )
+        parser.add_argument(
+            "--empty-marker",
+            default="",
+            help=(
+                "Если семантическая проверка не нашла достаточно "
+                "событий, завершиться успешно и создать указанный "
+                "marker-файл. Без параметра сохраняется строгое "
+                "поведение с CommandError."
+            ),
+        )
 
     def handle(self, *args, **options):
         region = str(options["region"]).strip()
@@ -177,6 +188,9 @@ class Command(BaseCommand):
         ).strip()
         topic = str(options["topic"]).strip()
         model = str(options["model"]).strip()
+        empty_marker = str(
+            options["empty_marker"]
+        ).strip()
 
         days = max(1, int(options["days"]))
         min_events = max(
@@ -296,10 +310,43 @@ class Command(BaseCommand):
         if model:
             screen_options["model"] = model
 
-        call_command(
-            "screen_regional_digest_candidates",
-            **screen_options,
-        )
+        try:
+            call_command(
+                "screen_regional_digest_candidates",
+                **screen_options,
+            )
+        except CommandError as exc:
+            error_text = str(exc)
+
+            if (
+                empty_marker
+                and "недостаточно событий"
+                in error_text.casefold()
+            ):
+                marker_path = Path(empty_marker)
+                marker_path.parent.mkdir(
+                    parents=True,
+                    exist_ok=True,
+                )
+                marker_path.write_text(
+                    (
+                        f"created_at="
+                        f"{timezone.now().isoformat()}\n"
+                        f"reason={error_text}\n"
+                    ),
+                    encoding="utf-8",
+                )
+
+                self.stdout.write(
+                    self.style.WARNING(
+                        "Pipeline completed without a digest: "
+                        "semantic screening found too few "
+                        "suitable events."
+                    )
+                )
+                return
+
+            raise
 
         digest = (
             RegionalDigest.objects

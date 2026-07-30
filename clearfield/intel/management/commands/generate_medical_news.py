@@ -833,20 +833,49 @@ def save_generation_error(
 
     close_old_connections()
 
-    GeneratedMedicalNews.objects.create(
-        brief_id=brief_id,
-        title=f"Ошибка генерации: {brief_title[:220]}",
-        slug=make_slug(f"generation-error-{brief_id}", brief_id),
-        meta_description="",
-        body="",
-        source_note="",
-        quality_score=0,
-        status=MedicalNewsStatus.ERROR,
-        llm_model=model,
-        llm_prompt=prompt,
-        llm_response_raw="",
-        llm_elapsed_ms=None,
-        llm_error=str(error),
+    values = {
+        "title": f"Ошибка генерации: {brief_title[:220]}",
+        "slug": make_slug(
+            f"generation-error-{brief_id}",
+            brief_id,
+        ),
+        "meta_description": "",
+        "body": "",
+        "source_note": "",
+        "quality_score": 0,
+        "status": MedicalNewsStatus.ERROR,
+        "llm_model": model,
+        "llm_prompt": prompt,
+        "llm_response_raw": "",
+        "llm_elapsed_ms": None,
+        "llm_error": str(error),
+    }
+
+    error_news = (
+        GeneratedMedicalNews.objects
+        .filter(
+            brief_id=brief_id,
+            status=MedicalNewsStatus.ERROR,
+        )
+        .order_by("-id")
+        .first()
+    )
+
+    if error_news is None:
+        GeneratedMedicalNews.objects.create(
+            brief_id=brief_id,
+            **values,
+        )
+        return
+
+    for field, value in values.items():
+        setattr(error_news, field, value)
+
+    error_news.save(
+        update_fields=[
+            *values.keys(),
+            "updated_at",
+        ]
     )
 
 

@@ -353,7 +353,7 @@ python3 manage.py export_medical_news_feed \
 Результат сохраняется в:
 
 ```text
-/home/j/joker2038/clearfield/public_html/generated-news/
+`$CLEARFIELD_PUBLIC_DIR/generated-news/`
 ```
 
 Пример имени файла:
@@ -481,7 +481,7 @@ Timeweb cron wrapper finished
 В панели Timeweb нужно указать команду:
 
 ```bash
-/bin/bash -lc '/home/j/joker2038/clearfield/public_html/clearfield/bin/run_medical_news_pipeline_cron.sh'
+/bin/bash -lc '/path/to/public_html/clearfield/bin/run_medical_news_pipeline_cron.sh'
 ```
 
 Рекомендуемое расписание:
@@ -702,4 +702,3 @@ git diff --cached --name-only
 * Не LLM вместо системы, а LLM как последний controlled step
 
 CLEARFIELD — фундамент для аналитических систем, decision-support инструментов и downstream AI без шума.
-

@@ -2,19 +2,24 @@
 
 set -Eeuo pipefail
 
-BASE="$HOME/clearfield/public_html/clearfield"
-PYTHON="$HOME/clearfield/public_html/venv/bin/python"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
+
+BASE="$CLEARFIELD_PROJECT_DIR"
+PYTHON="$CLEARFIELD_PYTHON"
 
 LOCAL_DIR="$BASE/var"
 LOCAL_FEED="$LOCAL_DIR/medical-semantic-feed.json"
 
-REMOTE_USER="appuser"
-REMOTE_HOST="186.246.51.201"
-REMOTE_DIR="/opt/apps/dzagurov/dzagurov"
-REMOTE_PYTHON="/opt/apps/dzagurov/venv/bin/python"
-REMOTE_FEED="var/medical-semantic-feed.json"
+REMOTE_USER="${DZAGUROV_REMOTE_USER:-appuser}"
+REMOTE_HOST="${DZAGUROV_REMOTE_HOST:-186.246.51.201}"
+REMOTE_DIR="${DZAGUROV_REMOTE_DIR:-/opt/apps/dzagurov/dzagurov}"
+REMOTE_PYTHON="${DZAGUROV_REMOTE_PYTHON:-/opt/apps/dzagurov/venv/bin/python}"
+REMOTE_FEED="${DZAGUROV_SEMANTIC_FEED:-var/medical-semantic-feed.json}"
 
-SSH_KEY="$HOME/.ssh/id_ed25519_dzagurov_news"
+SSH_KEY="${DZAGUROV_SSH_KEY:-$HOME/.ssh/id_ed25519_dzagurov_news}"
+SSH_KNOWN_HOSTS="${DZAGUROV_KNOWN_HOSTS:-$HOME/.ssh/known_hosts}"
 
 LOG_DIR="$BASE/logs"
 LOCK_FILE="$LOG_DIR/dzagurov_semantic_feed_sync.lock"
@@ -39,8 +44,8 @@ SSH_OPTS=(
   -o ConnectTimeout=20
   -o ServerAliveInterval=15
   -o ServerAliveCountMax=3
-  -o StrictHostKeyChecking=accept-new
-  -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+  -o StrictHostKeyChecking=yes
+  -o UserKnownHostsFile="$SSH_KNOWN_HOSTS"
 )
 
 TMP_FEED="$(

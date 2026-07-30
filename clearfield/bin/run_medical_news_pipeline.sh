@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-BASE="/home/j/joker2038/clearfield/public_html/clearfield"
-VENV="/home/j/joker2038/clearfield/public_html/venv/bin/activate"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
+
+BASE="$CLEARFIELD_PROJECT_DIR"
+VENV="$CLEARFIELD_VENV_ACTIVATE"
 LOG_DIR="$BASE/logs"
 LOG_FILE="$LOG_DIR/medical_news_pipeline.log"
 LOCK_FILE="$LOG_DIR/medical_news_pipeline.lock"

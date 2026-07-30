@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-BASE="$HOME/clearfield/public_html/clearfield"
-VENV="$HOME/clearfield/public_html/venv/bin/activate"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
+
+BASE="$CLEARFIELD_PROJECT_DIR"
+VENV="$CLEARFIELD_VENV_ACTIVATE"
 LOG_DIR="$BASE/logs"
-FEED_DIR="$HOME/clearfield/public_html/generated-news"
+FEED_DIR="$CLEARFIELD_FEED_DIR"
 
 cd "$BASE"
 mkdir -p "$LOG_DIR" "$FEED_DIR"
