@@ -60,6 +60,15 @@ STRONG_PATIENT_TOPICS = [
     "диабет", "сахар", "диспансеризац", "профилактик",
     "онколог", "реабилитац", "анем", "ферритин",
     "ттг", "щитовид", "сердц", "беремен", "витамин",
+    "анем", "гемоглобин", "аллерг", "инфекц", "гепатит",
+    "холестерин", "онкомаркер", "скрининг",
+]
+
+HARD_OFFTOPIC_WORDS = [
+    "бензин", "азс", "топлив", "дтп", "автомоб",
+    "ремонт дорог", "пожар", "мчс", "сизо",
+    "фотоконкурс", "поздравление", "выпускник",
+    "кадровой политик",
 ]
 
 
@@ -271,20 +280,19 @@ class Command(BaseCommand):
                 source_text,
                 EDITORIAL_MEDICAL_TOPICS,
             )
+            has_hard_offtopic = has_any_word(
+                source_text,
+                HARD_OFFTOPIC_WORDS,
+            )
 
             if not has_medical:
                 reasons.append("no-medical-context")
 
-            if (
-                has_medical
-                and not has_local
-                and not (
-                    has_lab_seo
-                    or has_strong_patient_topic
-                    or has_editorial_medical_topic
-                )
-            ):
-                reasons.append("weak-medical-relevance")
+            if has_hard_offtopic:
+                reasons.append("hard-offtopic")
+
+            if not (has_lab_seo or has_strong_patient_topic):
+                reasons.append("no-lab-or-patient-search-intent")
 
             for old_title in generated_titles:
                 ratio = similarity(title, old_title)

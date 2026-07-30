@@ -171,6 +171,53 @@ STRONG_PATIENT_TOPICS = (
     "реабилитац",
     "обследован",
     "профосмотр",
+    "анем",
+    "ферритин",
+    "гемоглобин",
+    "щитовид",
+    "ттг",
+    "аллерг",
+    "беремен",
+    "инфекц",
+    "гепатит",
+    "холестерин",
+    "сердечно-сосуд",
+    "онкомаркер",
+    "скрининг",
+)
+
+HARD_OFFTOPIC_MARKERS = (
+    "бензин",
+    "азс",
+    "топлив",
+    "дтп",
+    "автомоб",
+    "ремонт дорог",
+    "пожар",
+    "мчс",
+    "сизо",
+    "конкурс",
+    "фотоконкурс",
+    "поздравил",
+    "поздравление",
+    "кадровой политик",
+    "выпускник",
+    "студент",
+    "совещание",
+    "подписали соглашение",
+)
+
+INSTITUTIONAL_MEDICINE_MARKERS = (
+    "открылась больница",
+    "открылась поликлиника",
+    "открылось отделение",
+    "капитального ремонта",
+    "пополнил коллектив",
+    "назначен главн",
+    "провели операцию",
+    "проведена операция",
+    "выполнили операцию",
+    "спасли пациент",
 )
 
 
@@ -295,6 +342,10 @@ def candidate_score(event: Event) -> tuple[int, list[str]]:
     good_hits = [marker for marker in GOOD_MEDICAL_MARKERS if marker in text]
     lab_hits = [marker for marker in LAB_MARKERS if marker in text]
     strong_hits = [marker for marker in STRONG_PATIENT_TOPICS if marker in text]
+    offtopic_hits = [marker for marker in HARD_OFFTOPIC_MARKERS if marker in text]
+    institutional_hits = [
+        marker for marker in INSTITUTIONAL_MEDICINE_MARKERS if marker in text
+    ]
 
     if good_hits:
         score += min(4, len(good_hits))
@@ -310,6 +361,17 @@ def candidate_score(event: Event) -> tuple[int, list[str]]:
     else:
         score -= 1
         reasons.append("no-strong-patient-topic")
+
+    if offtopic_hits:
+        score -= 20
+        reasons.append("hard-offtopic:" + ",".join(offtopic_hits[:3]))
+
+    if institutional_hits and not lab_hits and not strong_hits:
+        score -= 8
+        reasons.append(
+            "institutional-no-commercial-intent:"
+            + ",".join(institutional_hits[:2])
+        )
 
     if event.evidence_level >= 2:
         score += 1
@@ -1046,6 +1108,14 @@ class Command(BaseCommand):
                 reason.startswith(("medical:", "lab:", "strong:"))
                 for reason in reasons
             )
+            has_commercial_signal = any(
+                reason.startswith(("lab:", "strong:"))
+                for reason in reasons
+            )
+            has_hard_offtopic = any(
+                reason.startswith("hard-offtopic:")
+                for reason in reasons
+            )
 
             if not has_medical_signal:
                 reasons = [*reasons, "no-medical-signal"]
@@ -1057,6 +1127,8 @@ class Command(BaseCommand):
                 and summary_len >= min_summary_len
                 and not bad_title
                 and has_medical_signal
+                and has_commercial_signal
+                and not has_hard_offtopic
             )
 
             if allow_weak:

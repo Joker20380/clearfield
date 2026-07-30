@@ -1072,6 +1072,11 @@ class Command(BaseCommand):
                 choose_profile(profile_text)
             )
 
+            service_intent_hits = matching_terms(
+                profile_text,
+                SERVICE_INTENT_TERMS,
+            )
+
             automotive_hits = matching_terms(
                 profile_text,
                 AUTOMOTIVE_CONTEXT_TERMS,
@@ -1097,6 +1102,16 @@ class Command(BaseCommand):
                 reasons.append(
                     "no-specific-profile"
                 )
+            elif not is_service_profile(profile):
+                reasons.append(
+                    "non-service-profile:"
+                    + profile["name"]
+                )
+
+            if not service_intent_hits:
+                reasons.append(
+                    "no-service-search-intent"
+                )
 
             if not automotive_hits:
                 reasons.append(
@@ -1121,6 +1136,8 @@ class Command(BaseCommand):
 
             editorial_rejected = (
                 profile is None
+                or not is_service_profile(profile)
+                or not service_intent_hits
                 or not automotive_hits
                 or bool(hard_title_hits)
                 or bool(hard_context_hits)

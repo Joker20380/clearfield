@@ -32,6 +32,28 @@ DANGEROUS_PROMISES = (
     "деталь необходимо заменить",
 )
 
+SERVICE_SEARCH_TERMS = (
+    "ремонт",
+    "обслуживан",
+    "диагност",
+    "неисправ",
+    "код ошиб",
+    "автосервис",
+    "замена",
+    "износ",
+    "поломк",
+    "стук",
+    "люфт",
+    "вибрац",
+    "перегрев",
+    "утечк",
+    "техосмотр",
+    "тормоз",
+    "подвес",
+    "двигател",
+    "автоэлект",
+)
+
 
 def normalize(value):
     text = str(value or "").lower()
@@ -189,6 +211,14 @@ def audit_brief(
             ]
         )
     )
+
+    if not any(
+        term in generated_text
+        for term in SERVICE_SEARCH_TERMS
+    ):
+        reasons.append(
+            "no-service-search-intent"
+        )
 
     for phrase in DANGEROUS_PROMISES:
         if normalize(phrase) in generated_text:
