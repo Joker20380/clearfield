@@ -108,6 +108,7 @@ SERVICE_INTENT_TERMS = (
 
 
 SERVICE_PROFILE_NAMES = {
+    "legislation",
     "maintenance",
     "suspension",
     "auto_electrics",

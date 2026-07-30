@@ -378,7 +378,7 @@ class AutomotiveBriefQualityGateTests(
             output,
         )
 
-    def test_accepts_general_product_news(
+    def test_rejects_general_product_news(
         self,
     ):
         event = self.create_event(
@@ -395,21 +395,13 @@ class AutomotiveBriefQualityGateTests(
 
         self.run_for_event(event)
 
-        brief = AutomotiveBrief.objects.get(
-            event=event,
+        self.assertFalse(
+            AutomotiveBrief.objects.filter(
+                event=event,
+            ).exists()
         )
 
-        self.assertIn(
-            "автомобильные новости",
-            brief.target_keyword,
-        )
-
-        self.assertNotIn(
-            "диагностика двигателя",
-            brief.target_keyword,
-        )
-
-    def test_accepts_automotive_market_news(
+    def test_rejects_automotive_market_news(
         self,
     ):
         event = self.create_event(
@@ -426,13 +418,10 @@ class AutomotiveBriefQualityGateTests(
 
         self.run_for_event(event)
 
-        brief = AutomotiveBrief.objects.get(
-            event=event,
-        )
-
-        self.assertIn(
-            "автомобильный рынок",
-            brief.target_keyword,
+        self.assertFalse(
+            AutomotiveBrief.objects.filter(
+                event=event,
+            ).exists()
         )
 
     def test_accepts_repair_cost_material(
