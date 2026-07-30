@@ -1,3 +1,1 @@
-from django.shortcuts import render
-
-
+"""HTTP views for the intel application."""
