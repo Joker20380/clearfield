@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 
-from intel.models import ContentProject, ContentTemplate
+from intel.models import ContentProject, ContentSource, ContentTemplate
 
 
 PROJECTS = (
@@ -16,6 +16,13 @@ PROJECTS = (
             "min_evidence_claims": 3,
             "min_source_domains": 2,
             "min_evidence_chars": 900,
+            "require_source_quotes": True,
+            "allowed_source_domains": [
+                "cdc.gov",
+                "medlineplus.gov",
+                "who.int",
+                "kdl-dzagurov.ru",
+            ],
             "expert_review_required": True,
             "forbidden_claims": [
                 "диагноз по одному анализу",
@@ -40,6 +47,12 @@ PROJECTS = (
             "min_evidence_claims": 2,
             "min_source_domains": 1,
             "min_evidence_chars": 600,
+            "require_source_quotes": True,
+            "allowed_source_domains": [
+                "epa.gov",
+                "nepis.epa.gov",
+                "diagnost-rso.ru",
+            ],
             "expert_review_required": True,
             "forbidden_claims": [
                 "диагноз автомобиля по одному коду ошибки",
@@ -85,6 +98,50 @@ TEMPLATES = (
 )
 
 
+SOURCES = {
+    "dzagurov": (
+        {
+            "name": "CDC: A1C Test",
+            "url": (
+                "https://www.cdc.gov/diabetes/diabetes-testing/"
+                "prediabetes-a1c-test.html"
+            ),
+            "source_type": "official",
+            "trust_level": 5,
+        },
+        {
+            "name": "MedlinePlus: HbA1c Test",
+            "url": (
+                "https://medlineplus.gov/lab-tests/"
+                "hemoglobin-a1c-hba1c-test/"
+            ),
+            "source_type": "official",
+            "trust_level": 5,
+        },
+    ),
+    "diagnost": (
+        {
+            "name": "EPA: OBD Questions and Answers",
+            "url": (
+                "https://nepis.epa.gov/Exe/ZyPURL.cgi"
+                "?Dockey=P100LW9G.TXT"
+            ),
+            "source_type": "official",
+            "trust_level": 5,
+        },
+        {
+            "name": "EPA: OBD FAQ",
+            "url": (
+                "https://nepis.epa.gov/Exe/ZyPURL.cgi"
+                "?Dockey=P1009Z15.TXT"
+            ),
+            "source_type": "official",
+            "trust_level": 5,
+        },
+    ),
+}
+
+
 class Command(BaseCommand):
     help = "Создаёт профили универсального контентного движка."
 
@@ -113,5 +170,17 @@ class Command(BaseCommand):
                     key=template_key,
                     defaults=values,
                 )
+            for source_config in SOURCES[key]:
+                values = dict(source_config)
+                url = values.pop("url")
+                ContentSource.objects.update_or_create(
+                    project=project,
+                    url=url,
+                    defaults=values,
+                )
 
-        self.stdout.write(self.style.SUCCESS("Projects: 2; templates: 4"))
+        self.stdout.write(
+            self.style.SUCCESS(
+                "Projects: 2; templates: 4; evidence sources: 4"
+            )
+        )

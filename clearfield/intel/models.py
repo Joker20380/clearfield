@@ -1327,6 +1327,56 @@ class ContentTemplate(models.Model):
         return f"{self.project.name}: {self.name}"
 
 
+class ContentSource(models.Model):
+    project = models.ForeignKey(
+        ContentProject,
+        on_delete=models.CASCADE,
+        related_name="content_sources",
+        verbose_name="Проект",
+    )
+    name = models.CharField("Название", max_length=300)
+    url = models.URLField("URL", max_length=1000)
+    source_type = models.CharField(
+        "Тип источника",
+        max_length=50,
+        default="primary",
+    )
+    trust_level = models.PositiveSmallIntegerField(
+        "Уровень доверия",
+        default=3,
+    )
+    is_enabled = models.BooleanField("Источник включён", default=True)
+    last_title = models.CharField(
+        "Последний заголовок",
+        max_length=500,
+        blank=True,
+    )
+    last_text = models.TextField("Последний извлечённый текст", blank=True)
+    content_sha256 = models.CharField(
+        "SHA256 содержимого",
+        max_length=64,
+        blank=True,
+    )
+    fetched_at = models.DateTimeField("Загружено", null=True, blank=True)
+    fetch_error = models.TextField("Ошибка загрузки", blank=True)
+    created_at = models.DateTimeField("Создано", auto_now_add=True)
+    updated_at = models.DateTimeField("Обновлено", auto_now=True)
+
+    class Meta:
+        ordering = ["project", "-trust_level", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "url"],
+                name="intel_unique_project_content_source",
+            ),
+        ]
+        verbose_name = "Источник evidence"
+        verbose_name_plural = "Источники evidence"
+
+    def __str__(self):
+        return f"{self.project.name}: {self.name}"
+
+
 class ContentBrief(models.Model):
     project = models.ForeignKey(
         ContentProject,

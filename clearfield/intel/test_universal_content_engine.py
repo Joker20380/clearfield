@@ -13,6 +13,10 @@ from intel.models import (
     GeneratedContent,
     GeneratedContentStatus,
 )
+from intel.content_research import (
+    validate_public_source_url,
+    verified_claims_from_response,
+)
 from intel.universal_content_engine import (
     parse_and_audit_generated_content,
     parse_factual_verification,
@@ -31,6 +35,7 @@ class UniversalContentEngineTests(TestCase):
                 "min_evidence_claims": 2,
                 "min_source_domains": 2,
                 "min_evidence_chars": 150,
+                "require_source_quotes": False,
             },
         )
         self.template = ContentTemplate.objects.create(
@@ -184,3 +189,45 @@ class UniversalContentEngineTests(TestCase):
 
         self.assertFalse(result["supported"])
         self.assertEqual(len(result["unsupported_claims"]), 1)
+
+    def test_research_rejects_private_network_url(self):
+        with self.assertRaises(ValueError):
+            validate_public_source_url(
+                "http://127.0.0.1/internal",
+                [],
+            )
+
+    def test_research_accepts_only_exact_source_quote(self):
+        document = (
+            "Диагностический код задаёт направление проверки, "
+            "но не доказывает неисправность конкретной детали."
+        )
+        response = json.dumps(
+            {
+                "claims": [
+                    {
+                        "claim": (
+                            "Код помогает определить направление "
+                            "последующей диагностической проверки."
+                        ),
+                        "source_quote": document,
+                    },
+                    {
+                        "claim": (
+                            "Неподтверждённый тезис не должен попасть "
+                            "в итоговый evidence-пакет."
+                        ),
+                        "source_quote": (
+                            "Этой цитаты в исходном документе нет "
+                            "и никогда не было."
+                        ),
+                    },
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+        claims = verified_claims_from_response(response, document)
+
+        self.assertEqual(len(claims), 1)
+        self.assertEqual(claims[0]["source_quote"], document)

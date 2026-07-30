@@ -19,6 +19,7 @@ from .models import (
     Source,
     ContentProject,
     ContentTemplate,
+    ContentSource,
     ContentBrief,
     GeneratedContent,
 )
@@ -82,6 +83,30 @@ class ContentTemplateAdmin(admin.ModelAdmin):
         "content_type",
         "expert_review_required",
         "is_enabled",
+    )
+
+
+@admin.register(ContentSource)
+class ContentSourceAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "project",
+        "name",
+        "source_type",
+        "trust_level",
+        "is_enabled",
+        "fetched_at",
+    )
+    list_filter = ("project", "source_type", "trust_level", "is_enabled")
+    search_fields = ("name", "url", "last_title", "last_text")
+    readonly_fields = (
+        "last_title",
+        "last_text",
+        "content_sha256",
+        "fetched_at",
+        "fetch_error",
+        "created_at",
+        "updated_at",
     )
 
 

@@ -56,6 +56,20 @@ def validate_evidence_pack(brief) -> list[str]:
             errors.append(f"evidence-{evidence_id or position}-short-claim")
         total_claim_chars += len(claim)
 
+        if policy.get("require_source_quotes", False):
+            source_quote = " ".join(
+                str(item.get("source_quote") or "").split()
+            )
+            source_sha256 = str(item.get("source_sha256") or "")
+            if len(source_quote) < 40:
+                errors.append(
+                    f"evidence-{evidence_id or position}-missing-source-quote"
+                )
+            if not re.fullmatch(r"[0-9a-f]{64}", source_sha256):
+                errors.append(
+                    f"evidence-{evidence_id or position}-missing-source-sha256"
+                )
+
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             errors.append(f"evidence-{evidence_id or position}-bad-url")
         else:
