@@ -92,6 +92,23 @@ class UniversalContentEngineTests(TestCase):
             any(error.startswith("evidence-pack-too-thin:") for error in errors)
         )
 
+    def test_verified_quotes_count_towards_evidence_depth(self):
+        self.project.policy.update(
+            {
+                "min_evidence_chars": 350,
+                "require_source_quotes": True,
+            }
+        )
+        self.project.save(update_fields=["policy", "updated_at"])
+        for item in self.brief.evidence_pack:
+            item["source_quote"] = (
+                "Дословная выдержка из сохранённого первичного источника "
+                "подтверждает редакторский пересказ."
+            )
+            item["source_sha256"] = "a" * 64
+
+        self.assertEqual(validate_evidence_pack(self.brief), [])
+
     def test_audit_rejects_unknown_evidence_id(self):
         payload = json.dumps(
             {

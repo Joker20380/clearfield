@@ -30,7 +30,7 @@ def validate_evidence_pack(brief) -> list[str]:
     )
     seen_ids: set[str] = set()
     domains: set[str] = set()
-    total_claim_chars = 0
+    total_evidence_chars = 0
 
     if len(pack) < min_claims:
         errors.append(f"not-enough-evidence:{len(pack)}<{min_claims}")
@@ -54,12 +54,13 @@ def validate_evidence_pack(brief) -> list[str]:
 
         if len(claim) < 40:
             errors.append(f"evidence-{evidence_id or position}-short-claim")
-        total_claim_chars += len(claim)
+        total_evidence_chars += len(claim)
 
         if policy.get("require_source_quotes", False):
             source_quote = " ".join(
                 str(item.get("source_quote") or "").split()
             )
+            total_evidence_chars += len(source_quote)
             source_sha256 = str(item.get("source_sha256") or "")
             if len(source_quote) < 40:
                 errors.append(
@@ -77,10 +78,10 @@ def validate_evidence_pack(brief) -> list[str]:
 
     if len(domains) < min_sources:
         errors.append(f"not-enough-source-domains:{len(domains)}<{min_sources}")
-    if total_claim_chars < min_evidence_chars:
+    if total_evidence_chars < min_evidence_chars:
         errors.append(
             "evidence-pack-too-thin:"
-            f"{total_claim_chars}<{min_evidence_chars}"
+            f"{total_evidence_chars}<{min_evidence_chars}"
         )
 
     return list(dict.fromkeys(errors))
