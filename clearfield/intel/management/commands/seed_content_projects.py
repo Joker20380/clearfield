@@ -118,6 +118,15 @@ SOURCES = {
             "source_type": "official",
             "trust_level": 5,
         },
+        {
+            "name": "MedlinePlus: Blood Glucose Test",
+            "url": (
+                "https://medlineplus.gov/lab-tests/"
+                "blood-glucose-test/"
+            ),
+            "source_type": "official",
+            "trust_level": 5,
+        },
     ),
     "diagnost": (
         {
