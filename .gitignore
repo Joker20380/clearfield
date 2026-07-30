@@ -1,14 +1,29 @@
-cat > .gitignore << 'EOF'
+# Secrets and local environments
 .env
+.env.*
+!.env.example
+!**/.env.example
 venv/
+
+# Python and Django runtime files
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
 *.sqlite3
 db.sqlite3
 media/
 staticfiles/
-EOF
 
-# Synced Dzagurov semantic catalogue
-/clearfield/var/medical-semantic-feed.json
+# Clearfield runtime state
+/clearfield/backups/
+/clearfield/logs/
+/clearfield/var/
+/generated-news/
+/generated_news_*.json
+
+# Operational backups
+*.bak
+*.bak.*
+*.backup
+*.backup_*
+*.more-news.*
+*.sslbak.*
