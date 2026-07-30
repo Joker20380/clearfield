@@ -1142,6 +1142,9 @@ class Command(BaseCommand):
                     and summary_len >= 80
                     and not bad_title
                     and has_medical_signal
+                    and has_commercial_signal
+                    and not has_hard_offtopic
+                    and not has_institutional_drift
                 )
 
             if is_good:
