@@ -15,6 +15,7 @@ from intel.models import (
 )
 from intel.universal_content_engine import (
     parse_and_audit_generated_content,
+    parse_factual_verification,
     validate_evidence_pack,
 )
 
@@ -153,3 +154,22 @@ class UniversalContentEngineTests(TestCase):
 
         self.assertIn("expert-review-metadata-required", output.getvalue())
         self.assertIn('"item_count": 0', output.getvalue())
+
+    def test_factual_verification_is_conservative(self):
+        result = parse_factual_verification(
+            json.dumps(
+                {
+                    "supported": True,
+                    "unsupported_claims": [
+                        {
+                            "quote": "Добавленный технический факт",
+                            "reason": "Этого нет в evidence pack",
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            )
+        )
+
+        self.assertFalse(result["supported"])
+        self.assertEqual(len(result["unsupported_claims"]), 1)

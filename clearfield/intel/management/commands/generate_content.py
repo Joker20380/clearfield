@@ -15,7 +15,9 @@ from intel.models import (
     GeneratedContentStatus,
 )
 from intel.universal_content_engine import (
+    build_factual_verification_prompt,
     build_universal_prompt,
+    parse_factual_verification,
     parse_and_audit_generated_content,
     validate_evidence_pack,
 )
@@ -91,6 +93,46 @@ class Command(BaseCommand):
                     model=options["model"] or settings.OLLAMA_MODEL,
                 )
                 payload = parse_and_audit_generated_content(brief, result.text)
+                policy = (
+                    brief.project.policy
+                    if isinstance(brief.project.policy, dict)
+                    else {}
+                )
+                verification_required = (
+                    policy.get("risk_level", "medium") != "low"
+                )
+
+                if verification_required:
+                    verification_result = generate_with_ollama(
+                        prompt=build_factual_verification_prompt(
+                            brief,
+                            payload["body"],
+                        ),
+                        system=(
+                            "Ты выполняешь только консервативную "
+                            "проверку фактической опоры текста."
+                        ),
+                        json_mode=True,
+                        model=options["model"] or settings.OLLAMA_MODEL,
+                    )
+                    verification = parse_factual_verification(
+                        verification_result.text
+                    )
+                    payload["qa_report"]["factual_verification"] = (
+                        verification
+                    )
+                    if not verification["supported"]:
+                        payload["qa_report"]["hard_issues"].append(
+                            "llm-factual-verification-failed"
+                        )
+                        payload["qa_report"]["issues"].append(
+                            "llm-factual-verification-failed"
+                        )
+                        payload["quality_score"] = max(
+                            0,
+                            payload["quality_score"] - 25,
+                        )
+
                 status = (
                     GeneratedContentStatus.ERROR
                     if payload["qa_report"]["hard_issues"]

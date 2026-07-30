@@ -202,6 +202,31 @@ def parse_and_audit_generated_content(brief, text: str) -> dict:
     if len(appendix) > 2:
         body = f"{body}\n\n" + "\n".join(appendix)
 
+    internal_links = (
+        brief.internal_links
+        if isinstance(brief.internal_links, list)
+        else []
+    )
+    link_lines = []
+    for item in internal_links:
+        if not isinstance(item, dict):
+            continue
+        url = str(item.get("url") or "").strip()
+        anchor = " ".join(str(item.get("anchor") or "").split())
+        parsed = urlparse(url)
+        if (
+            anchor
+            and parsed.scheme in {"http", "https"}
+            and parsed.netloc
+        ):
+            link_lines.append(f"- [{anchor}]({url})")
+
+    if link_lines:
+        body = (
+            f"{body}\n\n## Полезные ссылки\n\n"
+            + "\n".join(link_lines)
+        )
+
     raw_slug = str(data.get("slug") or "")
     safe_slug = slugify(raw_slug)[:255] or f"content-{brief.pk}"
     hard_issues = [
@@ -230,4 +255,61 @@ def parse_and_audit_generated_content(brief, text: str) -> dict:
             "expert_review_required": brief.template.expert_review_required,
             "evidence_count": len(used_ids),
         },
+    }
+
+
+def build_factual_verification_prompt(brief, generated_body: str) -> str:
+    evidence = "\n".join(
+        (
+            f"[{str(item.get('id') or '').upper()}] "
+            f"{item.get('claim')}"
+        )
+        for item in brief.evidence_pack
+        if isinstance(item, dict)
+    )
+    return f"""
+Ты строгий факт-чекер. Сравни текст только с evidence pack.
+Считай неподтверждённым любое конкретное техническое, медицинское,
+юридическое, финансовое или причинно-следственное утверждение,
+которое не следует непосредственно из evidence pack.
+Не считай evidence-маркеры доказательством сами по себе.
+Общие связующие и редакционные фразы допустимы, если они не добавляют факт.
+При сомнении считай утверждение неподтверждённым.
+
+Evidence pack:
+{evidence}
+
+Проверяемый текст:
+{generated_body}
+
+Верни строго JSON:
+{{
+  "supported": true,
+  "unsupported_claims": [
+    {{"quote": "точный короткий фрагмент", "reason": "почему не подтверждён"}}
+  ]
+}}
+Если найден хотя бы один неподтверждённый тезис, supported должно быть false.
+""".strip()
+
+
+def parse_factual_verification(text: str) -> dict:
+    data = parse_json_response(text)
+    unsupported = data.get("unsupported_claims")
+    if not isinstance(unsupported, list):
+        unsupported = []
+
+    cleaned = []
+    for item in unsupported[:20]:
+        if not isinstance(item, dict):
+            continue
+        quote = " ".join(str(item.get("quote") or "").split())[:500]
+        reason = " ".join(str(item.get("reason") or "").split())[:500]
+        if quote:
+            cleaned.append({"quote": quote, "reason": reason})
+
+    supported = data.get("supported") is True and not cleaned
+    return {
+        "supported": supported,
+        "unsupported_claims": cleaned,
     }
