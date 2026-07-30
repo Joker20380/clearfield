@@ -615,7 +615,7 @@ def build_user_prompt(brief: MedicalBrief) -> str:
         normalize_text(confirmed_source_text(brief))
     )
 
-    evergreen = brief.event_id is None
+    evergreen = getattr(brief, "event_id", None) is None
 
     if evergreen:
         article_length_instruction = (

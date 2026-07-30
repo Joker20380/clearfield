@@ -255,7 +255,7 @@ def build_user_prompt(
         brief.disclaimer_required
     )
 
-    evergreen = brief.event_id is None
+    evergreen = getattr(brief, "event_id", None) is None
     content_mode = (
         "evergreen-сервисная статья"
         if evergreen
