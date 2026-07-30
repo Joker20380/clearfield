@@ -145,6 +145,7 @@ class AutomotiveApprovalExportTests(
             str(news.pk),
             "--min-score",
             "70",
+            "--allow-evergreen",
             stdout=StringIO(),
         )
 
@@ -183,6 +184,22 @@ class AutomotiveApprovalExportTests(
             "low-quality-score:45",
             output.getvalue(),
         )
+
+    def test_evergreen_requires_explicit_expert_override(self):
+        news = self.create_news()
+        output = StringIO()
+
+        call_command(
+            "auto_approve_automotive_news",
+            "--news-ids",
+            str(news.pk),
+            "--show-skipped",
+            stdout=output,
+        )
+
+        news.refresh_from_db()
+        self.assertEqual(news.status, AutomotiveNewsStatus.REVIEW)
+        self.assertIn("expert-review-required", output.getvalue())
 
     def test_export_contract(self):
         news = self.create_news(

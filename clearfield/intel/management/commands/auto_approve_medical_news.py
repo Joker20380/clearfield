@@ -220,6 +220,14 @@ class Command(BaseCommand):
         )
         parser.add_argument("--dry-run", action="store_true")
         parser.add_argument("--show-rejected", action="store_true")
+        parser.add_argument(
+            "--allow-evergreen",
+            action="store_true",
+            help=(
+                "Явно разрешить автоодобрение evergreen-статей. "
+                "По умолчанию они требуют ручной экспертной проверки."
+            ),
+        )
 
     def handle(self, *args, **options):
         status = options["status"]
@@ -279,6 +287,13 @@ class Command(BaseCommand):
             ])
 
             reasons = []
+
+            if (
+                item.brief_id
+                and item.brief.event_id is None
+                and not options["allow_evergreen"]
+            ):
+                reasons.append("expert-review-required")
 
             if len(normalize(title)) < 18:
                 reasons.append("short-title")

@@ -37,6 +37,7 @@ from intel.models import (
     AutomotiveNewsStatus,
     GeneratedAutomotiveNews,
 )
+from intel.seo_content_quality import assess_seo_content
 
 
 def refresh_old_connections() -> None:
@@ -254,10 +255,15 @@ def build_user_prompt(
         brief.disclaimer_required
     )
 
+    evergreen = brief.event_id is None
     content_mode = (
-        "сервисный материал"
-        if service_mode
-        else "обычная автомобильная новость"
+        "evergreen-сервисная статья"
+        if evergreen
+        else (
+            "сервисный материал"
+            if service_mode
+            else "обычная автомобильная новость"
+        )
     )
 
     disclaimer_mode = (
@@ -299,6 +305,13 @@ ID задания: {brief.pk}
 {source_block}
 
 Дополнительные требования:
+- В первом абзаце прямо ответь на главный поисковый запрос.
+- Для evergreen-статьи используй 3–5 полезных разделов и ориентир
+  1800–3500 знаков, но не выдумывай факты и не раздувай объём.
+- Не называй evergreen-статью новостью.
+- Не создавай цитаты, имя механика, эксперта или автора.
+- Не утверждай, что материал проверен специалистом.
+- Не добавляй FAQ только для повторения ключевых фраз.
 - Не выдавай контекст аудитории за географию события.
 - Не добавляй причины изменения рыночного показателя,
   если причины отсутствуют в подтверждённых фактах.
@@ -701,6 +714,16 @@ class Command(BaseCommand):
                     )
 
                     disclaimer_text = ""
+
+                seo_quality = assess_seo_content(
+                    title=payload["title"],
+                    meta_description=payload["meta_description"],
+                    body=payload["body"],
+                    target_keyword=brief.target_keyword,
+                    source_urls=brief.source_urls,
+                    evergreen=brief.event_id is None,
+                )
+                payload["quality_score"] = seo_quality.score
 
                 source_urls = (
                     normalize_source_urls(

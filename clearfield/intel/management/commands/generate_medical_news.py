@@ -24,6 +24,7 @@ from intel.models import (
     MedicalBriefStatus,
     MedicalNewsStatus,
 )
+from intel.seo_content_quality import assess_seo_content
 
 
 IMAGE_TOPICS = (
@@ -614,7 +615,15 @@ def build_user_prompt(brief: MedicalBrief) -> str:
         normalize_text(confirmed_source_text(brief))
     )
 
-    if confirmed_length < 1200:
+    evergreen = brief.event_id is None
+
+    if evergreen:
+        article_length_instruction = (
+            "Это evergreen-статья, а не новость. Цель — полностью решить "
+            "одну задачу пациента. Желаемый объём 1800–3500 знаков, но "
+            "не повторяй мысли и не добавляй факты ради длины."
+        )
+    elif confirmed_length < 1200:
         article_length_instruction = (
             "Объём: примерно 1000–1800 знаков. "
             "Источник содержит мало подробностей, поэтому не растягивай "
@@ -642,7 +651,7 @@ def build_user_prompt(brief: MedicalBrief) -> str:
     )
 
     return f"""
-Подготовь информационную медицинскую новость.
+Подготовь {("полезную медицинскую evergreen-статью" if evergreen else "информационную медицинскую новость")}.
 
 Исходный заголовок:
 {brief.title}
@@ -679,7 +688,13 @@ def build_user_prompt(brief: MedicalBrief) -> str:
 - {article_length_instruction}
 - Используй Markdown.
 - Начни с короткого введения.
-- Используй 2–4 смысловых подзаголовка второго уровня в формате «## Заголовок».
+- Используй 3–5 смысловых подзаголовков второго уровня в формате «## Заголовок».
+- В первом абзаце дай прямой и краткий ответ на основной запрос.
+- Не называй текст новостью, если это evergreen-статья.
+- Не создавай цитаты, мнение врача, имя автора или эксперта.
+- Не пиши, что материал проверен специалистом: это решает редактор.
+- Не делай отдельный FAQ ради ключевых слов; вопросы допустимы только
+  если дают читателю новую практическую информацию.
 - Добавь осторожный вывод.
 - Не добавляй дисклеймер в body_markdown:
   система добавит его автоматически после проверки текста.
@@ -1067,6 +1082,16 @@ class Command(BaseCommand):
                 payload["body"] = apply_system_disclaimer(
                     payload["body"]
                 )
+
+                seo_quality = assess_seo_content(
+                    title=payload["title"],
+                    meta_description=payload["meta_description"],
+                    body=payload["body"],
+                    target_keyword=brief.target_keyword,
+                    source_urls=brief.source_urls,
+                    evergreen=brief.event_id is None,
+                )
+                payload["quality_score"] = seo_quality.score
 
                 # После долгого LLM-запроса MySQL мог закрыть idle-соединение.
                 # Поэтому обязательно закрываем старое соединение перед записью.

@@ -162,6 +162,14 @@ class Command(BaseCommand):
             "--show-skipped",
             action="store_true",
         )
+        parser.add_argument(
+            "--allow-evergreen",
+            action="store_true",
+            help=(
+                "Явно разрешить автоодобрение evergreen-статей. "
+                "По умолчанию они требуют ручной экспертной проверки."
+            ),
+        )
 
     def handle(self, *args, **options):
         limit = max(
@@ -223,6 +231,13 @@ class Command(BaseCommand):
                     min_body_chars
                 ),
             )
+
+            if (
+                news.brief_id
+                and news.brief.event_id is None
+                and not options["allow_evergreen"]
+            ):
+                errors.insert(0, "expert-review-required")
 
             if errors:
                 skipped += 1

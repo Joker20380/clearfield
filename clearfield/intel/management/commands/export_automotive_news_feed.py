@@ -114,6 +114,14 @@ def build_item(
             )
         ),
         "image_topic": news.image_topic,
+        "content_type": (
+            "evergreen_article"
+            if news.brief_id and news.brief.event_id is None
+            else "news"
+        ),
+        "expert_review_required": bool(
+            news.brief_id and news.brief.event_id is None
+        ),
         "created_at": (
             isoformat_or_none(
                 news.created_at

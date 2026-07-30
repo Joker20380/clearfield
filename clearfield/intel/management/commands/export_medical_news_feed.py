@@ -507,6 +507,14 @@ class Command(BaseCommand):
                     getattr(brief, "angle", "") or ""
                 ),
                 "image_topic": first_obj_value(item, ["image_topic"]),
+                "content_type": (
+                    "evergreen_article"
+                    if brief and brief.event_id is None
+                    else "news"
+                ),
+                "expert_review_required": bool(
+                    brief and brief.event_id is None
+                ),
                 "semantic_panel_id": (
                     semantic_landing["panel_id"]
                     if semantic_landing
