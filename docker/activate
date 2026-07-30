@@ -1,0 +1,2 @@
+# Compatibility shim for pipeline scripts which expect a virtualenv.
+export PATH="/usr/local/bin:/usr/bin:/bin"

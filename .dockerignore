@@ -1,0 +1,12 @@
+.git
+.env.docker
+clearfield/.env
+clearfield/backups
+clearfield/logs
+clearfield/staticfiles
+clearfield/var
+generated-news
+migration
+venv
+**/__pycache__
+**/*.pyc

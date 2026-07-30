@@ -1,0 +1,81 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: clearfield_db
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME}
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - clearfield_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    build:
+      context: .
+    container_name: clearfield_web
+    restart: unless-stopped
+    user: "1000:1000"
+    network_mode: host
+    env_file:
+      - clearfield/.env
+      - .env.docker
+    environment:
+      DATABASE_ENGINE: django.db.backends.postgresql
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: "55432"
+      OLLAMA_BASE_URL: http://127.0.0.1:18081
+    volumes:
+      - ./clearfield/.env:/opt/apps/clearfield/clearfield/.env:ro
+      - ./generated-news:/opt/apps/clearfield/generated-news
+      - ./clearfield/logs:/opt/apps/clearfield/clearfield/logs
+      - ./clearfield/staticfiles:/opt/apps/clearfield/clearfield/staticfiles
+      - ./clearfield/var:/opt/apps/clearfield/clearfield/var
+      - /home/appuser/.ssh:/home/appuser/.ssh:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-H", "Host: workhub-rso.ru", "-H", "X-Forwarded-Proto: https", "http://127.0.0.1:8105/admin/login/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  scheduler:
+    build:
+      context: .
+    container_name: clearfield_scheduler
+    restart: unless-stopped
+    network_mode: host
+    entrypoint: ["/opt/apps/clearfield/docker/scheduler-entrypoint.sh"]
+    env_file:
+      - clearfield/.env
+      - .env.docker
+    environment:
+      DATABASE_ENGINE: django.db.backends.postgresql
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: "55432"
+      OLLAMA_BASE_URL: http://127.0.0.1:18081
+    volumes:
+      - ./clearfield/.env:/opt/apps/clearfield/clearfield/.env:ro
+      - ./generated-news:/opt/apps/clearfield/generated-news
+      - ./clearfield/logs:/opt/apps/clearfield/clearfield/logs
+      - ./clearfield/var:/opt/apps/clearfield/clearfield/var
+      - /home/appuser/.ssh:/home/appuser/.ssh:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  clearfield_postgres_data:
+    name: clearfield_postgres_data
