@@ -366,7 +366,7 @@ def candidate_score(event: Event) -> tuple[int, list[str]]:
         score -= 20
         reasons.append("hard-offtopic:" + ",".join(offtopic_hits[:3]))
 
-    if institutional_hits and not lab_hits and not strong_hits:
+    if institutional_hits and not lab_hits:
         score -= 8
         reasons.append(
             "institutional-no-commercial-intent:"
@@ -1116,6 +1116,10 @@ class Command(BaseCommand):
                 reason.startswith("hard-offtopic:")
                 for reason in reasons
             )
+            has_institutional_drift = any(
+                reason.startswith("institutional-no-commercial-intent:")
+                for reason in reasons
+            )
 
             if not has_medical_signal:
                 reasons = [*reasons, "no-medical-signal"]
@@ -1129,6 +1133,7 @@ class Command(BaseCommand):
                 and has_medical_signal
                 and has_commercial_signal
                 and not has_hard_offtopic
+                and not has_institutional_drift
             )
 
             if allow_weak:

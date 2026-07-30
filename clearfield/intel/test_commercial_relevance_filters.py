@@ -56,6 +56,25 @@ class MedicalCommercialRelevanceTests(SimpleTestCase):
             any(reason.startswith("lab:") for reason in reasons)
         )
 
+    def test_rejects_surgery_story_without_laboratory_angle(self):
+        score, reasons = medical_candidate_score(
+            self.event(
+                "Врачи провели операцию на сердце беременной пациентке",
+                (
+                    "Хирурги выполнили сложную операцию на открытом сердце "
+                    "на 23 неделе беременности. Пациентка находится под "
+                    "наблюдением специалистов."
+                ),
+            )
+        )
+
+        self.assertTrue(
+            any(
+                reason.startswith("institutional-no-commercial-intent:")
+                for reason in reasons
+            )
+        )
+
 
 class AutomotiveCommercialRelevanceTests(SimpleTestCase):
     def test_market_sales_profile_is_not_a_service_profile(self):
