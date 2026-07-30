@@ -173,7 +173,7 @@ class MedicalNewsGenerationGuardrailsTests(
         )
 
         self.assertIn(
-            "2–4 смысловых подзаголовка",
+            "3–5 смысловых подзаголовков",
             prompt,
         )
         self.assertIn(
