@@ -33,6 +33,9 @@ def generate_with_ollama(
     system: str = "",
     json_mode: bool = False,
     model: str | None = None,
+    timeout_seconds: int | None = None,
+    max_tokens: int | None = None,
+    retries: int = 0,
 ) -> OllamaResult:
     """
     Синхронный клиент OpenAI-compatible API llama.cpp.
@@ -80,7 +83,9 @@ def generate_with_ollama(
             _get_setting("OLLAMA_TOP_P", 0.9)
         ),
         "max_tokens": int(
-            _get_setting("OLLAMA_NUM_PREDICT", 2500)
+            max_tokens
+            if max_tokens is not None
+            else _get_setting("OLLAMA_NUM_PREDICT", 2500)
         ),
     }
 
@@ -106,41 +111,48 @@ def generate_with_ollama(
 
     started = time.perf_counter()
 
-    try:
-        with urllib.request.urlopen(
-            request,
-            timeout=int(_get_setting("OLLAMA_TIMEOUT", 600)),
-        ) as response:
-            response_body = response.read().decode(
+    timeout = max(
+        1,
+        int(
+            timeout_seconds
+            if timeout_seconds is not None
+            else _get_setting("OLLAMA_TIMEOUT", 600)
+        ),
+    )
+    retry_count = max(0, int(retries))
+
+    for attempt in range(retry_count + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                response_body = response.read().decode(
+                    "utf-8",
+                    errors="replace",
+                )
+                status_code = response.status
+            break
+        except urllib.error.HTTPError as exc:
+            error_body = exc.read().decode(
                 "utf-8",
                 errors="replace",
             )
-            status_code = response.status
+            if exc.code not in {429, 502, 503, 504} or attempt >= retry_count:
+                logger.exception("LLM HTTP error: %s", error_body[:2000])
+                raise OllamaError(
+                    f"LLM HTTP error {exc.code}: {error_body[:2000]}"
+                ) from exc
+        except (urllib.error.URLError, TimeoutError) as exc:
+            if attempt >= retry_count:
+                logger.exception("LLM connection or timeout error")
+                raise OllamaError(
+                    f"LLM request failed after {attempt + 1} attempt(s): {exc}"
+                ) from exc
 
-    except urllib.error.HTTPError as exc:
-        error_body = exc.read().decode(
-            "utf-8",
-            errors="replace",
+        logger.warning(
+            "Retrying LLM request: attempt %s/%s",
+            attempt + 2,
+            retry_count + 1,
         )
-        logger.exception(
-            "LLM HTTP error: %s",
-            error_body[:2000],
-        )
-        raise OllamaError(
-            f"LLM HTTP error {exc.code}: {error_body[:2000]}"
-        ) from exc
-
-    except urllib.error.URLError as exc:
-        logger.exception("LLM connection error")
-        raise OllamaError(
-            f"LLM connection error: {exc}"
-        ) from exc
-
-    except TimeoutError as exc:
-        logger.exception("LLM request timeout")
-        raise OllamaError(
-            "LLM request timeout"
-        ) from exc
+        time.sleep(min(2 ** attempt, 8))
 
     elapsed_ms = int(
         (time.perf_counter() - started) * 1000

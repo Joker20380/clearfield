@@ -31,6 +31,10 @@ class Command(BaseCommand):
         parser.add_argument("--brief-ids", default="")
         parser.add_argument("--limit", type=int, default=1)
         parser.add_argument("--model", default="")
+        parser.add_argument("--llm-timeout", type=int, default=0)
+        parser.add_argument("--llm-retries", type=int, default=0)
+        parser.add_argument("--generation-max-tokens", type=int, default=2200)
+        parser.add_argument("--verification-max-tokens", type=int, default=900)
         parser.add_argument("--force", action="store_true")
         parser.add_argument("--dry-run", action="store_true")
 
@@ -91,6 +95,9 @@ class Command(BaseCommand):
                     system=system,
                     json_mode=True,
                     model=options["model"] or settings.OLLAMA_MODEL,
+                    timeout_seconds=options["llm_timeout"] or None,
+                    max_tokens=max(options["generation_max_tokens"], 500),
+                    retries=max(options["llm_retries"], 0),
                 )
                 payload = parse_and_audit_generated_content(brief, result.text)
                 policy = (
@@ -114,6 +121,12 @@ class Command(BaseCommand):
                         ),
                         json_mode=True,
                         model=options["model"] or settings.OLLAMA_MODEL,
+                        timeout_seconds=options["llm_timeout"] or None,
+                        max_tokens=max(
+                            options["verification_max_tokens"],
+                            300,
+                        ),
+                        retries=max(options["llm_retries"], 0),
                     )
                     verification = parse_factual_verification(
                         verification_result.text

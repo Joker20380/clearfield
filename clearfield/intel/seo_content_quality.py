@@ -19,6 +19,22 @@ def _words(value: object) -> list[str]:
     )
 
 
+def _contains_keyword_terms(text: object, keyword: object) -> bool:
+    """Accept natural wording when all keyword terms occur in order."""
+    text_words = _words(text)
+    keyword_words = _words(keyword)
+    if not keyword_words:
+        return True
+
+    position = 0
+    for word in text_words:
+        if word == keyword_words[position]:
+            position += 1
+            if position == len(keyword_words):
+                return True
+    return False
+
+
 def assess_seo_content(
     *,
     title: object,
@@ -61,10 +77,10 @@ def assess_seo_content(
         issues.append("h1-in-body")
 
     if keyword:
-        if keyword not in title_text.casefold():
+        if not _contains_keyword_terms(title_text, keyword):
             score -= 8
             issues.append("keyword-not-in-title")
-        if keyword not in body_text.casefold():
+        if not _contains_keyword_terms(body_text, keyword):
             score -= 8
             issues.append("keyword-not-in-body")
 

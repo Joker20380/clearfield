@@ -4,6 +4,33 @@ from intel.seo_content_quality import assess_seo_content
 
 
 class SeoContentQualityTests(SimpleTestCase):
+    def test_accepts_natural_keyword_wording_with_terms_in_order(self):
+        result = assess_seo_content(
+            title=(
+                "HbA1c и глюкоза крови: в чём разница между анализами"
+            ),
+            meta_description=(
+                "Подробное объяснение показателей на основе проверенных "
+                "источников для обсуждения результатов со специалистом."
+            ),
+            body=(
+                "## Первый раздел\n\n"
+                "HbA1c и глюкоза крови показывают разные данные; разница "
+                "раскрыта ниже. "
+                + ("Подтверждённое объяснение. " * 80)
+                + "\n\n## Второй раздел\n\n"
+                + ("Дополнительное объяснение. " * 40)
+                + "\n\n## Третий раздел\n\n"
+                + ("Итоговое объяснение. " * 40)
+            ),
+            target_keyword="HbA1c и глюкоза крови разница",
+            source_urls="https://example.com/source",
+            evergreen=True,
+        )
+
+        self.assertNotIn("keyword-not-in-title", result.issues)
+        self.assertNotIn("keyword-not-in-body", result.issues)
+
     def test_flags_thin_unsourced_evergreen_content(self):
         result = assess_seo_content(
             title="Короткий текст",
