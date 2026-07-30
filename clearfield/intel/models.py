@@ -1230,3 +1230,230 @@ for _model in _INTEL_ADMIN_MODELS:
         _field.choices = (
             _translated_choices
         )
+
+
+# =============================================================================
+# UNIVERSAL CONTENT ENGINE
+# =============================================================================
+
+
+class ContentBriefStatus(models.TextChoices):
+    DRAFT = "draft", "Черновик"
+    READY = "ready", "Готово к генерации"
+    USED = "used", "Использовано"
+    REJECTED = "rejected", "Отклонено"
+
+
+class GeneratedContentStatus(models.TextChoices):
+    REVIEW = "review", "На проверке"
+    APPROVED = "approved", "Одобрено"
+    PUBLISHED = "published", "Опубликовано"
+    REJECTED = "rejected", "Отклонено"
+    ERROR = "error", "Ошибка"
+
+
+class ContentProject(models.Model):
+    key = models.SlugField("Ключ проекта", max_length=80, unique=True)
+    name = models.CharField("Название", max_length=200)
+    niche = models.CharField("Тематика", max_length=200)
+    audience = models.CharField("Целевая аудитория", max_length=300)
+    locale = models.CharField("Локаль", max_length=20, default="ru-RU")
+    brand_name = models.CharField("Бренд", max_length=200, blank=True)
+    site_url = models.URLField("Сайт", max_length=500, blank=True)
+    system_prompt = models.TextField("Системные инструкции", blank=True)
+    policy = models.JSONField(
+        "Политика качества",
+        default=dict,
+        blank=True,
+        help_text=(
+            "Настройки риска, источников, экспертной проверки "
+            "и запрещённых утверждений."
+        ),
+    )
+    is_enabled = models.BooleanField("Проект включён", default=True)
+    created_at = models.DateTimeField("Создано", auto_now_add=True)
+    updated_at = models.DateTimeField("Обновлено", auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name = "Контентный проект"
+        verbose_name_plural = "Контентные проекты"
+
+    def __str__(self):
+        return self.name
+
+
+class ContentTemplate(models.Model):
+    project = models.ForeignKey(
+        ContentProject,
+        on_delete=models.CASCADE,
+        related_name="templates",
+        verbose_name="Проект",
+    )
+    key = models.SlugField("Ключ шаблона", max_length=80)
+    name = models.CharField("Название", max_length=200)
+    content_type = models.CharField(
+        "Тип материала",
+        max_length=50,
+        default="evergreen_article",
+    )
+    instructions = models.TextField("Инструкции")
+    min_chars = models.PositiveIntegerField("Минимум символов", default=1800)
+    max_chars = models.PositiveIntegerField("Максимум символов", default=4000)
+    min_sections = models.PositiveSmallIntegerField(
+        "Минимум разделов",
+        default=3,
+    )
+    expert_review_required = models.BooleanField(
+        "Требуется экспертная проверка",
+        default=True,
+    )
+    is_enabled = models.BooleanField("Шаблон включён", default=True)
+    created_at = models.DateTimeField("Создано", auto_now_add=True)
+    updated_at = models.DateTimeField("Обновлено", auto_now=True)
+
+    class Meta:
+        ordering = ["project", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "key"],
+                name="intel_unique_content_template",
+            ),
+        ]
+        verbose_name = "Шаблон контента"
+        verbose_name_plural = "Шаблоны контента"
+
+    def __str__(self):
+        return f"{self.project.name}: {self.name}"
+
+
+class ContentBrief(models.Model):
+    project = models.ForeignKey(
+        ContentProject,
+        on_delete=models.CASCADE,
+        related_name="briefs",
+        verbose_name="Проект",
+    )
+    template = models.ForeignKey(
+        ContentTemplate,
+        on_delete=models.PROTECT,
+        related_name="briefs",
+        verbose_name="Шаблон",
+    )
+    cluster_key = models.SlugField("Ключ кластера", max_length=160)
+    title = models.CharField("Рабочий заголовок", max_length=300)
+    primary_keyword = models.CharField("Главный запрос", max_length=300)
+    secondary_keywords = models.JSONField(
+        "Дополнительные запросы",
+        default=list,
+        blank=True,
+    )
+    search_intent = models.CharField(
+        "Поисковое намерение",
+        max_length=80,
+        default="informational",
+    )
+    evidence_pack = models.JSONField(
+        "Пакет доказательств",
+        default=list,
+        help_text=(
+            "Список объектов: id, claim, source_url, source_title."
+        ),
+    )
+    internal_links = models.JSONField(
+        "Внутренние ссылки",
+        default=list,
+        blank=True,
+        help_text="Список объектов: url, anchor.",
+    )
+    instructions = models.TextField("Дополнительные инструкции", blank=True)
+    status = models.CharField(
+        "Статус",
+        max_length=20,
+        choices=ContentBriefStatus.choices,
+        default=ContentBriefStatus.DRAFT,
+        db_index=True,
+    )
+    created_at = models.DateTimeField("Создано", auto_now_add=True)
+    updated_at = models.DateTimeField("Обновлено", auto_now=True)
+    used_at = models.DateTimeField("Использовано", null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "cluster_key"],
+                name="intel_unique_content_cluster",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["project", "status", "-created_at"]),
+        ]
+        verbose_name = "Универсальное редакционное задание"
+        verbose_name_plural = "Универсальные редакционные задания"
+
+    def __str__(self):
+        return self.title
+
+
+class GeneratedContent(models.Model):
+    brief = models.ForeignKey(
+        ContentBrief,
+        on_delete=models.PROTECT,
+        related_name="generated_items",
+        verbose_name="Задание",
+    )
+    title = models.CharField("Заголовок", max_length=300)
+    slug = models.SlugField("URL", max_length=255, db_index=True)
+    meta_description = models.CharField(
+        "Мета-описание",
+        max_length=320,
+    )
+    body = models.TextField("Текст Markdown")
+    used_evidence_ids = models.JSONField(
+        "Использованные доказательства",
+        default=list,
+    )
+    source_urls = models.JSONField("Источники", default=list)
+    qa_report = models.JSONField("Отчёт проверки", default=dict)
+    quality_score = models.PositiveSmallIntegerField(
+        "Оценка качества",
+        default=0,
+    )
+    status = models.CharField(
+        "Статус",
+        max_length=20,
+        choices=GeneratedContentStatus.choices,
+        default=GeneratedContentStatus.REVIEW,
+        db_index=True,
+    )
+    reviewer_name = models.CharField(
+        "Проверил",
+        max_length=200,
+        blank=True,
+    )
+    reviewed_at = models.DateTimeField("Проверено", null=True, blank=True)
+    llm_model = models.CharField("LLM", max_length=120, blank=True)
+    llm_prompt = models.TextField("Запрос LLM", blank=True)
+    llm_response_raw = models.TextField("Ответ LLM", blank=True)
+    llm_elapsed_ms = models.PositiveIntegerField(
+        "Время генерации, мс",
+        null=True,
+        blank=True,
+    )
+    llm_error = models.TextField("Ошибка", blank=True)
+    created_at = models.DateTimeField("Создано", auto_now_add=True)
+    updated_at = models.DateTimeField("Обновлено", auto_now=True)
+    published_at = models.DateTimeField("Опубликовано", null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status", "-created_at"]),
+            models.Index(fields=["brief", "status"]),
+        ]
+        verbose_name = "Универсальный материал"
+        verbose_name_plural = "Универсальные материалы"
+
+    def __str__(self):
+        return self.title

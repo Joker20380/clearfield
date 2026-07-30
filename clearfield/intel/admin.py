@@ -17,6 +17,10 @@ from .models import (
     MedicalNewsStatus,
     RawItem,
     Source,
+    ContentProject,
+    ContentTemplate,
+    ContentBrief,
+    GeneratedContent,
 )
 
 
@@ -54,6 +58,96 @@ set_admin_names(MedicalBrief, "Медицинское задание", "Меди
 set_admin_names(GeneratedMedicalNews, "Медицинская новость", "Медицинские новости")
 set_admin_names(RegionalDigest, "Региональная SEO-новость", "Региональные SEO-новости")
 set_admin_names(RegionalDigestItem, "Событие региональной SEO-новости", "События региональных SEO-новостей")
+
+
+@admin.register(ContentProject)
+class ContentProjectAdmin(admin.ModelAdmin):
+    list_display = ("key", "name", "niche", "site_url", "is_enabled")
+    list_filter = ("is_enabled", "locale")
+    search_fields = ("key", "name", "niche", "brand_name", "site_url")
+
+
+@admin.register(ContentTemplate)
+class ContentTemplateAdmin(admin.ModelAdmin):
+    list_display = (
+        "key",
+        "name",
+        "project",
+        "content_type",
+        "expert_review_required",
+        "is_enabled",
+    )
+    list_filter = (
+        "project",
+        "content_type",
+        "expert_review_required",
+        "is_enabled",
+    )
+
+
+@admin.register(ContentBrief)
+class ContentBriefAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "project",
+        "cluster_key",
+        "short_title",
+        "search_intent",
+        "status",
+        "created_at",
+    )
+    list_filter = ("project", "template", "search_intent", "status")
+    search_fields = (
+        "cluster_key",
+        "title",
+        "primary_keyword",
+        "instructions",
+    )
+    readonly_fields = ("created_at", "updated_at", "used_at")
+
+    @admin.display(description="Заголовок")
+    def short_title(self, obj):
+        return short_text(obj.title, 90)
+
+
+@admin.register(GeneratedContent)
+class GeneratedContentAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "project_name",
+        "short_title",
+        "quality_score",
+        "status",
+        "reviewer_name",
+        "created_at",
+    )
+    list_filter = ("brief__project", "brief__template", "status")
+    search_fields = (
+        "title",
+        "slug",
+        "meta_description",
+        "body",
+        "brief__primary_keyword",
+    )
+    readonly_fields = (
+        "qa_report",
+        "llm_model",
+        "llm_prompt",
+        "llm_response_raw",
+        "llm_elapsed_ms",
+        "llm_error",
+        "created_at",
+        "updated_at",
+        "published_at",
+    )
+
+    @admin.display(description="Проект")
+    def project_name(self, obj):
+        return obj.brief.project.name
+
+    @admin.display(description="Заголовок")
+    def short_title(self, obj):
+        return short_text(obj.title, 90)
 
 
 # =============================================================================

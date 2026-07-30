@@ -1,0 +1,123 @@
+import json
+from types import SimpleNamespace
+
+from django.core.management import call_command
+from django.test import TestCase
+
+from intel.models import (
+    ContentBrief,
+    ContentBriefStatus,
+    ContentProject,
+    ContentTemplate,
+)
+from intel.universal_content_engine import (
+    parse_and_audit_generated_content,
+    validate_evidence_pack,
+)
+
+
+class UniversalContentEngineTests(TestCase):
+    def setUp(self):
+        self.project = ContentProject.objects.create(
+            key="test-project",
+            name="Test",
+            niche="тестовая тематика",
+            audience="читатели",
+            policy={
+                "min_evidence_claims": 2,
+                "min_source_domains": 2,
+            },
+        )
+        self.template = ContentTemplate.objects.create(
+            project=self.project,
+            key="guide",
+            name="Guide",
+            instructions="Написать полезное руководство.",
+        )
+        self.brief = ContentBrief.objects.create(
+            project=self.project,
+            template=self.template,
+            cluster_key="test-cluster",
+            title="Подробное руководство по тестовой теме",
+            primary_keyword="руководство по тестовой теме",
+            status=ContentBriefStatus.READY,
+            evidence_pack=[
+                {
+                    "id": "E1",
+                    "claim": (
+                        "Первое подтверждённое утверждение содержит "
+                        "достаточно подробное фактическое основание."
+                    ),
+                    "source_url": "https://one.example/source",
+                    "source_title": "Источник один",
+                },
+                {
+                    "id": "E2",
+                    "claim": (
+                        "Второе подтверждённое утверждение дополняет "
+                        "материал независимым фактическим основанием."
+                    ),
+                    "source_url": "https://two.example/source",
+                    "source_title": "Источник два",
+                },
+            ],
+        )
+
+    def test_validates_source_diversity(self):
+        self.assertEqual(validate_evidence_pack(self.brief), [])
+
+        self.brief.evidence_pack[1]["source_url"] = (
+            "https://one.example/another"
+        )
+        errors = validate_evidence_pack(self.brief)
+        self.assertIn("not-enough-source-domains:1<2", errors)
+
+    def test_audit_rejects_unknown_evidence_id(self):
+        payload = json.dumps(
+            {
+                "title": (
+                    "Руководство по тестовой теме: практический разбор"
+                ),
+                "slug": "test-guide",
+                "meta_description": (
+                    "Подробное описание тестовой темы на основе "
+                    "проверенных источников и практической структуры."
+                ),
+                "body_markdown": (
+                    "Краткий прямой ответ. [E1]\n\n"
+                    "## Первый раздел\n\n"
+                    + ("Полезное объяснение. " * 50)
+                    + "[E1]\n\n## Второй раздел\n\n"
+                    + ("Дополнительное объяснение. " * 50)
+                    + "[E9]\n\n## Третий раздел\n\n"
+                    + ("Итоговое объяснение. " * 50)
+                ),
+                "used_evidence_ids": ["E1", "E9"],
+            },
+            ensure_ascii=False,
+        )
+
+        result = parse_and_audit_generated_content(self.brief, payload)
+
+        self.assertTrue(result["qa_report"]["hard_issues"])
+        self.assertIn(
+            "unknown-evidence:E9",
+            result["qa_report"]["issues"],
+        )
+
+    def test_seed_projects_is_idempotent(self):
+        call_command("seed_content_projects", "--apply")
+        call_command("seed_content_projects", "--apply")
+
+        self.assertEqual(
+            ContentProject.objects.filter(
+                key__in=["dzagurov", "diagnost"]
+            ).count(),
+            2,
+        )
+        self.assertEqual(
+            ContentTemplate.objects.filter(
+                project__key__in=["dzagurov", "diagnost"]
+            ).count(),
+            4,
+        )
