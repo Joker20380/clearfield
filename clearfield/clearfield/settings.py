@@ -134,21 +134,40 @@ TEMPLATES = [
 # DATABASE
 # =============================================================================
 
+DATABASE_ENGINE = config(
+    "DATABASE_ENGINE",
+    default="django.db.backends.mysql",
+)
+
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.mysql",
+        "ENGINE": DATABASE_ENGINE,
         "NAME": config("DATABASE_NAME"),
         "USER": config("DATABASE_USER"),
         "PASSWORD": config("DATABASE_PASSWORD"),
         "HOST": config("DATABASE_HOST", default="127.0.0.1"),
-        "PORT": config("DATABASE_PORT", default="3306"),
-        "CONN_MAX_AGE": config("DATABASE_CONN_MAX_AGE", default=0, cast=int),
-        "OPTIONS": {
-            "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
-            "charset": "utf8mb4",
-        },
+        "PORT": config(
+            "DATABASE_PORT",
+            default=(
+                "5432"
+                if DATABASE_ENGINE
+                == "django.db.backends.postgresql"
+                else "3306"
+            ),
+        ),
+        "CONN_MAX_AGE": config(
+            "DATABASE_CONN_MAX_AGE",
+            default=0,
+            cast=int,
+        ),
     }
 }
+
+if DATABASE_ENGINE == "django.db.backends.mysql":
+    DATABASES["default"]["OPTIONS"] = {
+        "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+        "charset": "utf8mb4",
+    }
 
 
 # =============================================================================
