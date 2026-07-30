@@ -1,4 +1,5 @@
 import json
+from io import StringIO
 from types import SimpleNamespace
 
 from django.core.management import call_command
@@ -9,6 +10,8 @@ from intel.models import (
     ContentBriefStatus,
     ContentProject,
     ContentTemplate,
+    GeneratedContent,
+    GeneratedContentStatus,
 )
 from intel.universal_content_engine import (
     parse_and_audit_generated_content,
@@ -121,3 +124,32 @@ class UniversalContentEngineTests(TestCase):
             ).count(),
             4,
         )
+
+    def test_export_blocks_missing_expert_review_metadata(self):
+        GeneratedContent.objects.create(
+            brief=self.brief,
+            title="Подробное руководство по тестовой теме",
+            slug="test-guide",
+            meta_description=(
+                "Полезный материал с проверяемыми источниками "
+                "и прозрачной редакционной подготовкой."
+            ),
+            body="## Раздел\n\nТекст [E1]",
+            used_evidence_ids=["E1"],
+            source_urls=["https://one.example/source"],
+            qa_report={},
+            quality_score=90,
+            status=GeneratedContentStatus.APPROVED,
+        )
+        output = StringIO()
+
+        call_command(
+            "export_content",
+            "--project=test-project",
+            "--output=/tmp/not-used.json",
+            "--dry-run",
+            stdout=output,
+        )
+
+        self.assertIn("expert-review-metadata-required", output.getvalue())
+        self.assertIn('"item_count": 0', output.getvalue())
