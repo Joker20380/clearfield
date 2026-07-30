@@ -19,8 +19,18 @@ def validate_evidence_pack(brief) -> list[str]:
     policy = brief.project.policy if isinstance(brief.project.policy, dict) else {}
     min_claims = max(int(policy.get("min_evidence_claims", 2)), 1)
     min_sources = max(int(policy.get("min_source_domains", 1)), 1)
+    min_evidence_chars = max(
+        int(
+            policy.get(
+                "min_evidence_chars",
+                max(250, int(brief.template.min_chars * 0.3)),
+            )
+        ),
+        100,
+    )
     seen_ids: set[str] = set()
     domains: set[str] = set()
+    total_claim_chars = 0
 
     if len(pack) < min_claims:
         errors.append(f"not-enough-evidence:{len(pack)}<{min_claims}")
@@ -44,6 +54,7 @@ def validate_evidence_pack(brief) -> list[str]:
 
         if len(claim) < 40:
             errors.append(f"evidence-{evidence_id or position}-short-claim")
+        total_claim_chars += len(claim)
 
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             errors.append(f"evidence-{evidence_id or position}-bad-url")
@@ -52,6 +63,11 @@ def validate_evidence_pack(brief) -> list[str]:
 
     if len(domains) < min_sources:
         errors.append(f"not-enough-source-domains:{len(domains)}<{min_sources}")
+    if total_claim_chars < min_evidence_chars:
+        errors.append(
+            "evidence-pack-too-thin:"
+            f"{total_claim_chars}<{min_evidence_chars}"
+        )
 
     return list(dict.fromkeys(errors))
 

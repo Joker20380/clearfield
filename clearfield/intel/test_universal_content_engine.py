@@ -30,6 +30,7 @@ class UniversalContentEngineTests(TestCase):
             policy={
                 "min_evidence_claims": 2,
                 "min_source_domains": 2,
+                "min_evidence_chars": 150,
             },
         )
         self.template = ContentTemplate.objects.create(
@@ -75,6 +76,16 @@ class UniversalContentEngineTests(TestCase):
         )
         errors = validate_evidence_pack(self.brief)
         self.assertIn("not-enough-source-domains:1<2", errors)
+
+    def test_rejects_thin_evidence_for_long_article(self):
+        self.project.policy["min_evidence_chars"] = 1000
+        self.project.save(update_fields=["policy", "updated_at"])
+
+        errors = validate_evidence_pack(self.brief)
+
+        self.assertTrue(
+            any(error.startswith("evidence-pack-too-thin:") for error in errors)
+        )
 
     def test_audit_rejects_unknown_evidence_id(self):
         payload = json.dumps(

@@ -15,6 +15,7 @@ PROJECTS = (
             "risk_level": "high",
             "min_evidence_claims": 3,
             "min_source_domains": 2,
+            "min_evidence_chars": 900,
             "expert_review_required": True,
             "forbidden_claims": [
                 "диагноз по одному анализу",
@@ -38,6 +39,7 @@ PROJECTS = (
             "risk_level": "medium",
             "min_evidence_claims": 2,
             "min_source_domains": 1,
+            "min_evidence_chars": 600,
             "expert_review_required": True,
             "forbidden_claims": [
                 "диагноз автомобиля по одному коду ошибки",
